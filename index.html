@@ -19,7 +19,6 @@
             font-size: 0.875rem;
         }
 
-        /* Original Professional Status Colors */
         .plate-ok { background: #10b981; color: #064e3b; border: 1px solid #065f46; }
         .plate-warn { background: #f59e0b; color: #451a03; border: 1px solid #92400e; }
         .plate-critical { background: #ef4444; color: #fef2f2; border: 1px solid #991b1b; animation: pulse-red 2s infinite; }
@@ -102,8 +101,9 @@
         ];
 
         function getStatusClass(v) {
-            if (!v || (!v.mot_due && !v.pmi_due)) return 'plate-ok';
-            const dates = [v.mot_due, v.pmi_due];
+            if (!v) return 'plate-ok';
+            // Included Road Tax in the health check
+            const dates = [v.mot_due, v.pmi_due, v.road_tax_due];
             const today = new Date();
             let highestAlert = 'plate-ok';
 
@@ -143,6 +143,10 @@
                         <div class="date-container pb-2">
                             <label class="block text-[9px] uppercase tracking-widest text-slate-500 font-black mb-1">Safety Insp.</label>
                             <input type="date" value="${v.pmi_due || ''}" onchange="window.saveData('${reg}', 'pmi_due', this)" class="w-full bg-transparent text-sm font-semibold outline-none">
+                        </div>
+                        <div class="date-container pb-2">
+                            <label class="block text-[9px] uppercase tracking-widest text-slate-500 font-black mb-1">Road Tax</label>
+                            <input type="date" value="${v.road_tax_due || ''}" onchange="window.saveData('${reg}', 'road_tax_due', this)" class="w-full bg-transparent text-sm font-semibold outline-none">
                         </div>
                         <div class="pb-1">
                             <label class="block text-[9px] uppercase tracking-widest text-slate-500 font-black mb-1">Last Service</label>
