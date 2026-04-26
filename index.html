@@ -19,7 +19,6 @@
         .nav-link { width: 100%; text-align: left; padding: 0.85rem 1.25rem; border-radius: 0.75rem; font-size: 1rem; font-weight: 700; margin-bottom: 0.4rem; color: #94a3b8; transition: all 0.2s; display: flex; align-items: center; gap: 0.75rem; }
         .nav-link.active { background: var(--fleet-red); color: white; box-shadow: 0 4px 12px rgba(225, 29, 72, 0.3); }
         
-        /* Compact Card Styling */
         .glass-card { background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1); transition: all 0.2s ease; position: relative; overflow: hidden; padding: 1rem !important; }
         .plate-badge { font-weight: 800; padding: 4px 12px; border-radius: 6px; font-size: 0.95rem; display: inline-flex; color: #fff; }
         .plate-ok { background: var(--fleet-green); }
@@ -48,7 +47,7 @@
         .sort-btn.active { background: #475569; color: white; border-color: #94a3b8; }
     </style>
 </head>
-<body>
+<body class="dark">
 
     <aside>
         <div class="mb-6">
@@ -62,6 +61,7 @@
         <nav class="mb-4">
             <button id="nav-v" onclick="switchTab('vehicle')" class="nav-link active">VEHICLES</button>
             <button id="nav-t" onclick="switchTab('trailer')" class="nav-link">TRAILERS</button>
+            <button id="nav-jcc" onclick="switchTab('jcc')" class="nav-link">JCC CONNECT</button>
         </nav>
 
         <div class="mb-6">
@@ -86,7 +86,7 @@
                 <span id="stat-total" class="text-xl font-black">--</span>
             </div>
             <button onclick="generateFullFleetPDF()" class="w-full bg-slate-700 text-white py-3 rounded-xl text-[11px] font-black hover:bg-slate-600 transition-all uppercase mb-2">Generate Fleet Report</button>
-            <button onclick="window.addNewVehicle()" class="w-full bg-rose-600 text-white py-3.5 rounded-xl text-sm font-bold hover:bg-rose-500 transition-all uppercase">+ Add Unit</button>
+            <button id="add-unit-btn" onclick="window.addNewUnit()" class="w-full bg-rose-600 text-white py-3.5 rounded-xl text-sm font-bold hover:bg-rose-500 transition-all uppercase">+ Add Unit</button>
         </div>
     </aside>
 
@@ -101,74 +101,125 @@
         let sortMode = 'alpha';
         let cachedChecks = [];
         let cachedVehicles = [];
+        let cachedTrailers = [];
 
         function toggleMode() { document.documentElement.classList.toggle('light'); document.documentElement.classList.toggle('dark'); }
-        function switchTab(tab) { currentTab = tab; document.getElementById('nav-v').classList.toggle('active', tab === 'vehicle'); document.getElementById('nav-t').classList.toggle('active', tab === 'trailer'); loadFleet(); }
+        
+        function switchTab(tab) { 
+            currentTab = tab; 
+            document.getElementById('nav-v').classList.toggle('active', tab === 'vehicle'); 
+            document.getElementById('nav-t').classList.toggle('active', tab === 'trailer'); 
+            document.getElementById('nav-jcc').classList.toggle('active', tab === 'jcc');
+            
+            // Hide/Show controls based on tab
+            const addBtn = document.getElementById('add-unit-btn');
+            if(tab === 'jcc') {
+                addBtn.style.display = 'none';
+                renderJCC();
+            } else {
+                addBtn.style.display = 'block';
+                loadFleet(); 
+            }
+        }
+
         function setSort(mode) { sortMode = mode; document.getElementById('sort-alpha').classList.toggle('active', mode === 'alpha'); document.getElementById('sort-date').classList.toggle('active', mode === 'date'); renderFleet(); }
 
         async function loadFleet() {
             try {
-                const [vResponse, cResponse] = await Promise.all([
+                const [vResponse, tResponse, cResponse] = await Promise.all([
                     supabaseClient.from('vehicles').select('*'),
+                    supabaseClient.from('trailers').select('*'),
                     supabaseClient.from('daily_vehicle_checks').select('*').order('created_at', { ascending: false })
                 ]);
                 cachedVehicles = vResponse.data || [];
+                cachedTrailers = tResponse.data || [];
                 cachedChecks = cResponse.data || [];
                 renderFleet();
             } catch (err) { console.error(err); }
         }
 
         function renderFleet() {
+            if (currentTab === 'jcc') return;
             const grid = document.getElementById('fleet-grid');
-            if (currentTab === 'trailer') { renderTrailers(); return; }
             grid.innerHTML = '';
-            document.getElementById('stat-total').innerText = cachedVehicles.length;
-            let vehicles = [...cachedVehicles];
+            
+            let data = currentTab === 'vehicle' ? [...cachedVehicles] : [...cachedTrailers];
+            document.getElementById('stat-total').innerText = data.length;
+
             if (sortMode === 'alpha') {
-                vehicles.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
+                data.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
             } else {
-                vehicles.sort((a, b) => getMinDate(a) - getMinDate(b));
+                data.sort((a, b) => getMinDate(a) - getMinDate(b));
             }
-            vehicles.forEach(v => {
+
+            data.forEach(v => {
                 const vReg = v.registration_number.replace(/\s+/g, '').toUpperCase();
                 const latestCheck = cachedChecks.find(c => c.registration && c.registration.replace(/\s+/g, '').toUpperCase() === vReg);
                 let hasActiveDefect = latestCheck && latestCheck.condition_status.toLowerCase().includes('defect') && !latestCheck.condition_status.toLowerCase().includes('nil');
+                const table = currentTab === 'vehicle' ? 'vehicles' : 'trailers';
+                
                 const card = document.createElement('div');
                 card.className = `glass-card rounded-xl ${v.is_vor ? 'card-vor' : ''}`;
+                
+                let fieldsHtml = currentTab === 'vehicle' ? `
+                    <div class="grid grid-cols-2 gap-x-3 gap-y-3">
+                        <div><span class="label-heading">MOT Due</span><input type="date" value="${v.mot_due || ''}" onchange="window.save('${v.registration_number}', 'mot_due', this.value, 'vehicles')"></div>
+                        <div><span class="label-heading">PMI Due</span><input type="date" value="${v.pmi_due || ''}" onchange="window.save('${v.registration_number}', 'pmi_due', this.value, 'vehicles')"></div>
+                        <div><span class="label-heading">Road Tax</span><input type="date" value="${v.road_tax_due || ''}" onchange="window.save('${v.registration_number}', 'road_tax_due', this.value, 'vehicles')"></div>
+                        <div><span class="label-heading">Brake Test</span><input type="date" value="${v.brake_test || ''}" onchange="window.save('${v.registration_number}', 'brake_test', this.value, 'vehicles')"></div>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-end">
+                        <div class="flex-1">
+                            <span class="label-heading">Tachograph Calibration</span>
+                            <input type="date" class="max-w-[170px]" value="${v.tachograph_service_due || ''}" onchange="window.save('${v.registration_number}', 'tachograph_service_due', this.value, 'vehicles')">
+                        </div>
+                ` : `
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><span class="label-heading">MOT Due</span><input type="date" value="${v.mot_due || ''}" onchange="window.save('${v.registration_number}', 'mot_due', this.value, 'trailers')"></div>
+                        <div><span class="label-heading">PMI Due</span><input type="date" value="${v.pmi_due || ''}" onchange="window.save('${v.registration_number}', 'pmi_due', this.value, 'trailers')"></div>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-end">
+                        <div class="flex-grow"></div>
+                `;
+
                 card.innerHTML = `
                     <div class="vor-stamp">OFF ROAD</div>
                     <div class="flex justify-between items-center mb-3 relative z-30">
                         <div class="flex flex-wrap items-center gap-1.5">
                             <div class="plate-badge ${getHealthStatus(v)}">${v.registration_number}</div>
-                            <button onclick="generatePDF('${v.registration_number}')" class="btn-action btn-pdf">PDF</button>
+                            ${currentTab === 'vehicle' ? `<button onclick="generatePDF('${v.registration_number}')" class="btn-action btn-pdf">PDF</button>` : ''}
                             <button onclick="generateReport('${v.registration_number}', true)" class="btn-action btn-history">History</button>
                             <button onclick="generateReport('${v.registration_number}', false)" class="btn-action ${hasActiveDefect ? 'defect-active' : ''}">${hasActiveDefect ? 'Defect' : 'Clear'}</button>
                         </div>
-                        <button onclick="toggleVOR_Action('${v.registration_number}', ${v.is_vor})" class="btn-action ${v.is_vor ? 'text-rose-500 font-black' : 'text-slate-500'}">${v.is_vor ? '● Active' : '○ VOR'}</button>
+                        <button onclick="toggleVOR_Action('${v.registration_number}', ${v.is_vor}, '${table}')" class="btn-action ${v.is_vor ? 'text-rose-500 font-black' : 'text-slate-500'}">${v.is_vor ? '● Active' : '○ VOR'}</button>
                     </div>
                     <div class="content-fade">
                         <div class="mb-3">
                             <span class="label-heading">VIN Number</span>
-                            <input type="text" class="input-text" value="${v.vin_number || ''}" onchange="window.save('${v.registration_number}', 'vin_number', this.value)">
+                            <input type="text" class="input-text" value="${v.vin_number || ''}" onchange="window.save('${v.registration_number}', 'vin_number', this.value, '${table}')">
                         </div>
-                        <div class="grid grid-cols-2 gap-x-3 gap-y-3">
-                            <div><span class="label-heading">MOT Due</span><input type="date" value="${v.mot_due || ''}" onchange="window.save('${v.registration_number}', 'mot_due', this.value)"></div>
-                            <div><span class="label-heading">PMI Due</span><input type="date" value="${v.pmi_due || ''}" onchange="window.save('${v.registration_number}', 'pmi_due', this.value)"></div>
-                            <div><span class="label-heading">Road Tax</span><input type="date" value="${v.road_tax_due || ''}" onchange="window.save('${v.registration_number}', 'road_tax_due', this.value)"></div>
-                            <div><span class="label-heading">Brake Test</span><input type="date" value="${v.brake_test || ''}" onchange="window.save('${v.registration_number}', 'brake_test', this.value)"></div>
-                        </div>
-                        <div class="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-end">
-                            <div class="flex-1">
-                                <span class="label-heading">Tachograph Calibration</span>
-                                <input type="date" class="max-w-[170px]" value="${v.tachograph_service_due || ''}" onchange="window.save('${v.registration_number}', 'tachograph_service_due', this.value)">
-                            </div>
-                            <button onclick="window.removeVehicle('${v.registration_number}')" class="text-slate-600 hover:text-rose-500 transition-colors mb-1">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
-                        </div>
-                    </div>`;
+                        ${fieldsHtml}
+                        <button onclick="window.removeUnit('${v.registration_number}', '${table}')" class="text-slate-600 hover:text-rose-500 transition-colors mb-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                    </div>
+                </div>`;
                 grid.appendChild(card);
             });
+        }
+
+        function renderJCC() {
+            const grid = document.getElementById('fleet-grid');
+            grid.innerHTML = `
+                <div class="col-span-full flex flex-col items-center justify-center p-20 text-center">
+                    <div class="w-20 h-20 bg-rose-600/10 rounded-full flex items-center justify-center mb-6">
+                        <svg class="w-10 h-10 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    </div>
+                    <h2 class="text-3xl font-black uppercase mb-2">JCC Connect</h2>
+                    <p class="text-slate-500 max-w-md font-medium">Integration module placeholder. This section will eventually host real-time connectivity features for the JCC fleet interface.</p>
+                </div>
+            `;
+            document.getElementById('stat-total').innerText = "0";
         }
 
         function getMinDate(v) {
@@ -178,18 +229,39 @@
         }
 
         window.generateFullFleetPDF = () => {
+            if(currentTab === 'jcc') return;
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('l', 'mm', 'a4');
             const today = new Date();
-            doc.setFontSize(20); doc.text("FTSMaintenance - Full Fleet Compliance Report", 14, 15);
+            const isTrailer = currentTab === 'trailer';
+            const pool = isTrailer ? cachedTrailers : cachedVehicles;
+            
+            doc.setFontSize(20); doc.text(`FTSMaintenance - ${isTrailer ? 'Trailer' : 'Vehicle'} Fleet Report`, 14, 15);
             doc.setFontSize(10); doc.text(`Date Generated: ${today.toLocaleString()}`, 14, 22);
-            const rows = cachedVehicles.map(v => {
+            
+            const rows = pool.map(v => {
                 const minD = getMinDate(v);
                 const diff = minD.getFullYear() === 2099 ? 'N/A' : Math.ceil((minD - today) / (1000 * 60 * 60 * 24));
-                return [v.registration_number, v.mot_due || '-', v.pmi_due || '-', v.road_tax_due || '-', v.brake_test || '-', v.tachograph_service_due || '-', v.is_vor ? 'OFF ROAD' : 'ACTIVE', diff === 'N/A' ? '-' : `${diff} Days`];
+                return [
+                    v.registration_number, 
+                    v.mot_due || '-', 
+                    v.pmi_due || '-', 
+                    isTrailer ? '-' : (v.road_tax_due || '-'), 
+                    isTrailer ? '-' : (v.brake_test || '-'), 
+                    v.is_vor ? 'OFF ROAD' : 'ACTIVE', 
+                    diff === 'N/A' ? '-' : `${diff} Days`
+                ];
             });
-            doc.autoTable({ startY: 30, head: [['Reg', 'MOT Due', 'PMI Due', 'Road Tax', 'Brake Test', 'Tacho', 'Status', 'Priority']], body: rows, theme: 'grid', headStyles: { fillColor: [225, 29, 72] }, styles: { fontSize: 8 }, didParseCell: function(data) { if (data.column.index === 7 && data.cell.text[0]) { const days = parseInt(data.cell.text[0]); if (days <= 5) data.cell.styles.textColor = [225, 29, 72]; else if (days <= 10) data.cell.styles.textColor = [245, 158, 11]; } } });
-            doc.save(`FTS_Fleet_Report_${today.toISOString().split('T')[0]}.pdf`);
+            
+            doc.autoTable({ 
+                startY: 30, 
+                head: [['Reg', 'MOT Due', 'PMI Due', 'Road Tax', 'Brake Test', 'Status', 'Days Remaining']], 
+                body: rows, 
+                theme: 'grid', 
+                headStyles: { fillColor: [225, 29, 72] }, 
+                styles: { fontSize: 8 } 
+            });
+            doc.save(`FTS_${isTrailer ? 'Trailer' : 'Vehicle'}_Report.pdf`);
         };
 
         window.generatePDF = (reg) => {
@@ -228,10 +300,18 @@
             loadFleet();
         };
 
-        window.save = async (reg, field, val) => { await supabaseClient.from('vehicles').update({ [field]: val }).eq('registration_number', reg); loadFleet(); };
-        window.toggleVOR_Action = async (reg, state) => { await supabaseClient.from('vehicles').update({ is_vor: !state }).eq('registration_number', reg); loadFleet(); };
-        window.addNewVehicle = async () => { const reg = prompt("Reg:").toUpperCase().trim(); if(reg) { await supabaseClient.from('vehicles').upsert({ registration_number: reg }); loadFleet(); } };
-        window.removeVehicle = async (reg) => { if(confirm(`Delete ${reg}?`)) { await supabaseClient.from('vehicles').delete().eq('registration_number', reg); loadFleet(); } };
+        window.save = async (reg, field, val, table) => { await supabaseClient.from(table).update({ [field]: val }).eq('registration_number', reg); loadFleet(); };
+        window.toggleVOR_Action = async (reg, state, table) => { await supabaseClient.from(table).update({ is_vor: !state }).eq('registration_number', reg); loadFleet(); };
+        
+        window.addNewUnit = async () => { 
+            const table = currentTab === 'vehicle' ? 'vehicles' : 'trailers';
+            const reg = prompt(`Add New ${currentTab === 'vehicle' ? 'Vehicle' : 'Trailer'} Reg:`).toUpperCase().trim(); 
+            if(reg) { await supabaseClient.from(table).upsert({ registration_number: reg }); loadFleet(); } 
+        };
+        
+        window.removeUnit = async (reg, table) => { 
+            if(confirm(`Delete ${reg} from ${table}?`)) { await supabaseClient.from(table).delete().eq('registration_number', reg); loadFleet(); } 
+        };
 
         function getHealthStatus(v) { 
             const today = new Date(); let s = 'plate-ok';
@@ -240,14 +320,12 @@
             return s;
         }
 
-        function renderTrailers() {
-            const grid = document.getElementById('fleet-grid'); grid.innerHTML = '';
-            const list = ["FTSTR01","FTSTR02","FTSTR30","FTSTR41","FTSTR42","FTSTR44","FTSTR45","FTSTR46","FTSTR03","FTSTR04","FTSTR05","FTSTR09","FTSTR11","FTSTR12","FTSTR17","FTSTR21","FTSTR22","FTSTR23","FTSTR24","FTSTR25","FTSTR26","FTSTR27","FTSTR28","FTSTR31","FTSTR60","FTSTR61","FTSTR62","FTSTR63","FTSTR64"];
-            document.getElementById('stat-total').innerText = list.length;
-            list.forEach(reg => { const card = document.createElement('div'); card.className = 'glass-card rounded-xl'; card.innerHTML = `<div class="flex justify-between items-center mb-3"><div class="plate-badge plate-ok">${reg}</div><span class="text-[11px] font-bold text-slate-500">TRAILER</span></div><div class="grid grid-cols-2 gap-3"><div><span class="label-heading">MOT</span><input type="date"></div><div><span class="label-heading">PMI</span><input type="date"></div></div>`; grid.appendChild(card); });
-        }
-
-        supabaseClient.channel('f_sync').on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => loadFleet()).on('postgres_changes', { event: '*', schema: 'public', table: 'daily_vehicle_checks' }, () => loadFleet()).subscribe();
+        supabaseClient.channel('f_sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => loadFleet())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'trailers' }, () => loadFleet())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_vehicle_checks' }, () => loadFleet())
+            .subscribe();
+            
         window.onload = loadFleet;
     </script>
 </body>
