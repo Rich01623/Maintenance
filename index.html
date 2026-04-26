@@ -3,229 +3,234 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vehicle Maintenance</title>
+    <title>Fleet Command v1.4.9 | Management Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; transition: background-color 0.3s; }
-        .dark body { background-color: #020617; color: #f8fafc; }
-        .light body { background-color: #f8fafc; color: #020617; }
-
-        .status-badge {
-            font-weight: 800; padding: 4px 14px; border-radius: 8px;
-            display: inline-flex; align-items: center; letter-spacing: -0.02em;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transition: all 0.3s ease;
-            font-size: 0.875rem;
-        }
-
-        .plate-ok { background: #10b981; color: #064e3b; border: 1px solid #065f46; }
-        .plate-warn { background: #f59e0b; color: #451a03; border: 1px solid #92400e; }
-        .plate-critical { background: #ef4444; color: #fef2f2; border: 1px solid #991b1b; animation: pulse-red 2s infinite; }
-        
-        .vor-badge-active { background: #ef4444; color: #fff; border: 1px solid #7f1d1d; cursor: pointer; }
-        .vor-badge-inactive { background: #1e293b; color: #94a3b8; border: 1px solid #334155; cursor: pointer; }
-
-        @keyframes pulse-red {
-            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-        }
-
-        .glass-card {
-            background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1); transition: all 0.3s ease;
-            position: relative; overflow: hidden;
-        }
-        .light .glass-card { background: white; border: 1px solid rgba(0,0,0,0.1); }
-        
-        .card-vor { opacity: 0.5; filter: grayscale(0.8); }
-        .card-vor .input-section { pointer-events: none; }
-        
-        .off-road-overlay {
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%) rotate(-10deg);
-            background: #ef4444; color: white;
-            padding: 8px 32px; font-weight: 900; font-size: 1.25rem;
-            border: 4px solid white; z-index: 10;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-            pointer-events: none; display: none;
-            white-space: nowrap;
-        }
-        .card-vor .off-road-overlay { display: block; }
-
-        .date-container { border-bottom: 1px solid rgba(156, 163, 175, 0.2); }
-        .dark input[type="date"] { color-scheme: dark; }
-
-        .nav-btn {
-            font-size: 10px; font-weight: 800; text-transform: uppercase;
-            letter-spacing: 0.05em; transition: all 0.2s;
-        }
-        .nav-btn:hover { color: #ef4444; }
+        :root { --fleet-red: #e11d48; --fleet-amber: #f59e0b; --fleet-green: #10b981; --bg-main: #0f172a; --sidebar-bg: #1e293b; --card-bg: #1e293b; --text-main: #f1f5f9; --border-color: #334155; }
+        .light { --bg-main: #f8fafc; --sidebar-bg: #ffffff; --card-bg: #ffffff; --text-main: #0f172a; --border-color: #e2e8f0; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-main); transition: all 0.3s ease; display: flex; height: 100vh; overflow: hidden; }
+        aside { width: 340px; background: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.5rem; height: 100vh; flex-shrink: 0; }
+        main { flex-grow: 1; height: 100vh; overflow-y: auto; padding: 2rem; }
+        .nav-link { width: 100%; text-align: left; padding: 0.85rem 1rem; border-radius: 0.75rem; font-size: 0.85rem; font-weight: 700; margin-bottom: 0.5rem; color: #94a3b8; transition: all 0.2s; display: flex; align-items: center; gap: 0.75rem; }
+        .nav-link.active { background: var(--fleet-red); color: white; box-shadow: 0 4px 12px rgba(225, 29, 72, 0.3); }
+        .glass-card { background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2); transition: all 0.2s ease; position: relative; overflow: hidden; }
+        .plate-badge { font-weight: 800; padding: 4px 12px; border-radius: 4px; font-size: 0.85rem; display: inline-flex; color: #fff; }
+        .plate-ok { background: var(--fleet-green); }
+        .plate-warn { background: var(--fleet-amber); color: #000; }
+        .plate-critical { background: var(--fleet-red); }
+        .btn-action { font-size: 9px; font-weight: 800; text-transform: uppercase; padding: 5px 8px; border-radius: 4px; border: 1px solid var(--border-color); transition: all 0.3s ease; position: relative; z-index: 20; }
+        .btn-history { background: rgba(51, 65, 85, 0.5); color: #94a3b8; }
+        .btn-pdf { background: #0ea5e9; color: white; border-color: #0ea5e9; }
+        .defect-active { background: var(--fleet-amber); color: #000; border-color: var(--fleet-amber); animation: pulse-border 2s infinite; cursor: pointer; }
+        @keyframes pulse-border { 0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); } 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
+        .vor-stamp { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-15deg); border: 4px solid var(--fleet-red); color: var(--fleet-red); padding: 4px 20px; font-weight: 900; font-size: 1.5rem; opacity: 0; pointer-events: none; background: var(--card-bg); z-index: 10; }
+        .card-vor .vor-stamp { opacity: 0.9; }
+        .card-vor .content-fade { opacity: 0.3; filter: grayscale(1); }
+        .grid-layout { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.5rem; }
+        input[type="date"], .input-text { background: rgba(0,0,0,0.1); border-radius: 4px; padding: 4px 6px; border: 1px solid var(--border-color); color: inherit; font-size: 0.75rem; font-weight: 600; width: 100%; outline: none; }
+        #report-panel { background: rgba(0,0,0,0.1); border: 1px dashed var(--border-color); border-radius: 0.75rem; padding: 1rem; font-size: 0.75rem; margin-top: 1rem; max-height: 420px; overflow-y: auto; }
+        .report-item { margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color); }
+        .sort-btn { background: #334155; color: #94a3b8; border: 1px solid #475569; padding: 0.5rem; border-radius: 0.5rem; font-size: 10px; font-weight: 800; width: 100%; text-align: center; cursor: pointer; transition: 0.2s; }
+        .sort-btn.active { background: #475569; color: white; border-color: #94a3b8; }
     </style>
 </head>
-<body class="min-h-screen pb-20">
+<body>
 
-    <nav class="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md mb-8">
-        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-            <div class="flex items-center">
-                <h1 class="text-lg font-bold tracking-tight uppercase">
-                    Vehicle <span class="text-red-600 font-black">Maintenance</span>
-                </h1>
-            </div>
-            
-            <div class="flex items-center gap-6">
-                <button onclick="window.addNewVehicle()" class="nav-btn">Add Vehicle</button>
-                <button onclick="window.removeVehicle()" class="nav-btn text-red-500">Remove Vehicle</button>
-                <div class="h-4 w-[1px] bg-slate-700"></div>
-                <button onclick="window.toggleTheme()" id="theme-btn" class="nav-btn">LIGHT MODE</button>
-                <span id="conn-status" class="px-3 py-1 rounded-full bg-slate-900 border border-slate-700 text-[9px] uppercase font-bold tracking-widest">Syncing...</span>
+    <aside>
+        <div class="mb-6">
+            <h1 class="text-xl font-black uppercase mb-1">Fleet<span class="text-rose-600">Command</span></h1>
+            <div class="flex items-center gap-2">
+                <p class="text-[9px] text-slate-500 uppercase tracking-widest font-black">● Live Sync Active</p>
+                <span class="text-[8px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-bold border border-slate-700">v1.4.9</span>
             </div>
         </div>
-    </nav>
+        
+        <nav class="mb-4">
+            <button id="nav-v" onclick="switchTab('vehicle')" class="nav-link active">VEHICLES</button>
+            <button id="nav-t" onclick="switchTab('trailer')" class="nav-link">TRAILERS</button>
+        </nav>
 
-    <main class="max-w-7xl mx-auto px-6">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" id="fleet-grid"></div>
-    </main>
+        <div class="mb-6">
+            <p class="text-[9px] text-slate-500 font-black uppercase mb-2">Sorting Preference</p>
+            <div class="flex gap-2">
+                <button id="sort-alpha" onclick="setSort('alpha')" class="sort-btn active">A-Z</button>
+                <button id="sort-date" onclick="setSort('date')" class="sort-btn">DUE DATE</button>
+            </div>
+        </div>
+
+        <div class="flex-grow">
+            <button onclick="toggleMode()" class="w-full text-left p-3 rounded-lg hover:bg-slate-800 transition text-xs font-bold text-slate-400 mb-2">◐ Toggle Day/Night</button>
+            <div class="mt-4">
+                <span id="panel-title" class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Audit Trail</span>
+                <div id="report-panel"><p class="text-slate-500 italic text-[10px]">Select card for details.</p></div>
+            </div>
+        </div>
+
+        <div class="pt-6 border-t border-slate-700">
+            <div class="bg-slate-800/40 p-3 rounded-lg mb-4 flex justify-between items-center"><span class="text-[10px] text-slate-500 font-bold uppercase">Total Units</span><span id="stat-total" class="text-lg font-black">--</span></div>
+            <button onclick="generateFullFleetPDF()" class="w-full bg-slate-700 text-white py-3 rounded-xl text-[10px] font-black hover:bg-slate-600 transition-all uppercase mb-2">Generate Fleet Report</button>
+            <button onclick="window.addNewVehicle()" class="w-full bg-rose-600 text-white py-3 rounded-xl text-xs font-bold hover:bg-rose-500 transition-all uppercase">+ Add Unit</button>
+        </div>
+    </aside>
+
+    <main><div id="fleet-grid" class="grid-layout"></div></main>
 
     <script>
-        const SUPABASE_URL = 'https://mbudwnwxucluwgbkgbfx.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1idWR3bnd4dWNsdXdnYmtnYmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMDQwMjYsImV4cCI6MjA5MDc4MDAyNn0.xFv-FiQ894vdfJuQYWQyF4WzQXmlnmnKvz_c8nuzl5Q';
-        
-        let supabaseClient = null;
+        const SB_URL = 'https://mbudwnwxucluwgbkgbfx.supabase.co';
+        const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1idWR3bnd4dWNsdXdnYmtnYmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMDQwMjYsImV4cCI6MjA5MDc4MDAyNn0.xFv-FiQ894vdfJuQYWQyF4WzQXmlnmnKvz_c8nuzl5Q';
+        const supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
 
-        const initialTruckList = [
-            'FJ17 OPT', 'HS19 YNH', 'PN19 HDL', 'DK69 ZHM', 'FJ69 WMC', 'FJ69 WML', 
-            'KU70 XNR', 'KU70 XNS', 'KU70 XNT', 'KU70 XNV', 'KU70 XNW', 'KU70 XNX', 
-            'FN21 HLZ', 'FR72 FTS', 'FS72 FTS', 'FT72 FTS', 'FD65 VZA', 'BX15 JSU'
-        ];
+        let currentTab = 'vehicle';
+        let sortMode = 'alpha';
+        let cachedChecks = [];
+        let cachedVehicles = [];
 
-        function getStatusClass(v) {
-            if (!v) return 'plate-ok';
-            // Included Road Tax in the health check
-            const dates = [v.mot_due, v.pmi_due, v.road_tax_due];
-            const today = new Date();
-            let highestAlert = 'plate-ok';
+        function toggleMode() { document.documentElement.classList.toggle('light'); document.documentElement.classList.toggle('dark'); }
+        function switchTab(tab) { currentTab = tab; document.getElementById('nav-v').classList.toggle('active', tab === 'vehicle'); document.getElementById('nav-t').classList.toggle('active', tab === 'trailer'); loadFleet(); }
+        function setSort(mode) { sortMode = mode; document.getElementById('sort-alpha').classList.toggle('active', mode === 'alpha'); document.getElementById('sort-date').classList.toggle('active', mode === 'date'); renderFleet(); }
 
-            dates.forEach(d => {
-                if (!d) return;
-                const diffDays = Math.ceil((new Date(d) - today) / (1000 * 60 * 60 * 24));
-                if (diffDays <= 7) highestAlert = 'plate-critical';
-                else if (diffDays <= 30 && highestAlert !== 'plate-critical') highestAlert = 'plate-warn';
-            });
-            return highestAlert;
+        async function loadFleet() {
+            try {
+                const [vResponse, cResponse] = await Promise.all([
+                    supabaseClient.from('vehicles').select('*'),
+                    supabaseClient.from('daily_vehicle_checks').select('*').order('created_at', { ascending: false })
+                ]);
+                cachedVehicles = vResponse.data || [];
+                cachedChecks = cResponse.data || [];
+                renderFleet();
+            } catch (err) { console.error(err); }
         }
 
-        function renderGrid(vehicles) {
+        function renderFleet() {
             const grid = document.getElementById('fleet-grid');
-            if (!grid) return;
-            grid.innerHTML = ''; 
-
+            if (currentTab === 'trailer') { renderTrailers(); return; }
+            grid.innerHTML = '';
+            document.getElementById('stat-total').innerText = cachedVehicles.length;
+            let vehicles = [...cachedVehicles];
+            if (sortMode === 'alpha') {
+                vehicles.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
+            } else {
+                vehicles.sort((a, b) => getMinDate(a) - getMinDate(b));
+            }
             vehicles.forEach(v => {
-                const reg = v.registration_number;
-                const safeId = reg.replace(/\s/g, '');
+                const vReg = v.registration_number.replace(/\s+/g, '').toUpperCase();
+                const latestCheck = cachedChecks.find(c => c.registration && c.registration.replace(/\s+/g, '').toUpperCase() === vReg);
+                let hasActiveDefect = latestCheck && latestCheck.condition_status.toLowerCase().includes('defect') && !latestCheck.condition_status.toLowerCase().includes('nil');
                 const card = document.createElement('div');
-                card.id = `card-${safeId}`;
-                card.className = `glass-card p-5 rounded-xl transition-all ${v.is_vor ? 'card-vor' : ''}`;
-                
-                card.innerHTML = `
-                    <div class="off-road-overlay">OFF ROAD</div>
-                    <div class="flex justify-between items-center mb-6 relative z-20">
-                        <span id="plate-${safeId}" class="status-badge ${getStatusClass(v)}">${reg}</span>
-                        <button id="vor-btn-${safeId}" onclick="window.toggleVOR('${reg}')" 
-                            class="status-badge ${v.is_vor ? 'vor-badge-active' : 'vor-badge-inactive'}">VOR</button>
-                    </div>
-                    <div class="space-y-4 input-section">
-                        <div class="date-container pb-2">
-                            <label class="block text-[9px] uppercase tracking-widest text-slate-500 font-black mb-1">MOT Expiry</label>
-                            <input type="date" value="${v.mot_due || ''}" onchange="window.saveData('${reg}', 'mot_due', this)" class="w-full bg-transparent text-sm font-semibold outline-none">
-                        </div>
-                        <div class="date-container pb-2">
-                            <label class="block text-[9px] uppercase tracking-widest text-slate-500 font-black mb-1">Safety Insp.</label>
-                            <input type="date" value="${v.pmi_due || ''}" onchange="window.saveData('${reg}', 'pmi_due', this)" class="w-full bg-transparent text-sm font-semibold outline-none">
-                        </div>
-                        <div class="date-container pb-2">
-                            <label class="block text-[9px] uppercase tracking-widest text-slate-500 font-black mb-1">Road Tax</label>
-                            <input type="date" value="${v.road_tax_due || ''}" onchange="window.saveData('${reg}', 'road_tax_due', this)" class="w-full bg-transparent text-sm font-semibold outline-none">
-                        </div>
-                        <div class="pb-1">
-                            <label class="block text-[9px] uppercase tracking-widest text-slate-500 font-black mb-1">Last Service</label>
-                            <input type="date" value="${v.last_serviced || ''}" onchange="window.saveData('${reg}', 'last_serviced', this)" class="w-full bg-transparent text-sm font-semibold outline-none">
-                        </div>
-                    </div>
-                    <div id="sync-${safeId}" class="mt-4 text-[8px] font-black text-emerald-500 opacity-0 text-right uppercase">Updated</div>
-                `;
+                card.className = `glass-card p-6 rounded-xl ${v.is_vor ? 'card-vor' : ''}`;
+                card.innerHTML = `<div class="vor-stamp">OFF ROAD</div><div class="flex justify-between items-center mb-6 relative z-30"><div class="flex flex-wrap items-center gap-2"><div class="plate-badge ${getHealthStatus(v)}">${v.registration_number}</div><button onclick="generatePDF('${v.registration_number}')" class="btn-action btn-pdf">PDF Report</button><button onclick="generateReport('${v.registration_number}', true)" class="btn-action btn-history">History</button><button onclick="generateReport('${v.registration_number}', false)" class="btn-action ${hasActiveDefect ? 'defect-active' : ''}">${hasActiveDefect ? 'Defect Active' : 'Clear'}</button></div><button onclick="toggleVOR_Action('${v.registration_number}', ${v.is_vor})" class="btn-action ${v.is_vor ? 'text-rose-500 font-black' : 'text-slate-500'}">${v.is_vor ? '● Active' : '○ VOR'}</button></div><div class="content-fade"><div class="mb-4"><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">VIN Number</p><input type="text" class="input-text" value="${v.vin_number || ''}" onchange="window.save('${v.registration_number}', 'vin_number', this.value)"></div><div class="grid grid-cols-2 gap-x-4 gap-y-4"><div><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">MOT Due</p><input type="date" value="${v.mot_due || ''}" onchange="window.save('${v.registration_number}', 'mot_due', this.value)"></div><div><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">PMI Due</p><input type="date" value="${v.pmi_due || ''}" onchange="window.save('${v.registration_number}', 'pmi_due', this.value)"></div><div><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">Road Tax</p><input type="date" value="${v.road_tax_due || ''}" onchange="window.save('${v.registration_number}', 'road_tax_due', this.value)"></div><div><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">Brake Test</p><input type="date" value="${v.brake_test || ''}" onchange="window.save('${v.registration_number}', 'brake_test', this.value)"></div></div><div class="mt-4 pt-4 border-t border-slate-700/50 flex justify-between items-end"><div class="flex-1"><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">Tachograph Calibration</p><input type="date" class="max-w-[160px]" value="${v.tachograph_service_due || ''}" onchange="window.save('${v.registration_number}', 'tachograph_service_due', this.value)"></div><button onclick="window.removeVehicle('${v.registration_number}')" class="text-slate-600 hover:text-rose-500 transition-colors mb-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button></div></div>`;
                 grid.appendChild(card);
             });
         }
 
-        window.loadFleet = async function() {
-            const status = document.getElementById('conn-status');
-            const placeholderData = initialTruckList.map(reg => ({ registration_number: reg, is_vor: false }));
-            renderGrid(placeholderData);
+        function getMinDate(v) {
+            const d = [v.mot_due, v.pmi_due, v.road_tax_due, v.tachograph_service_due, v.brake_test].filter(Boolean);
+            if (d.length === 0) return new Date('2099-01-01');
+            return new Date(Math.min(...d.map(date => new Date(date))));
+        }
 
-            try {
-                if (!window.supabase) throw new Error("Blocked");
-                if (!supabaseClient) supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-                let { data: vehicles, error } = await supabaseClient.from('vehicles').select('*').order('registration_number', { ascending: true });
-                if (error) throw error;
-
-                if (vehicles && vehicles.length > 0) {
-                    renderGrid(vehicles);
-                    status.innerText = "Connected"; 
-                    status.className = "px-3 py-1 rounded-full bg-slate-900 border border-slate-700 text-[9px] uppercase font-bold tracking-widest text-emerald-500";
-                }
-            } catch (err) {
-                status.innerText = "Offline Mode";
-                status.className = "px-3 py-1 rounded-full bg-slate-900 border border-slate-700 text-[9px] uppercase font-bold tracking-widest text-orange-500";
-            }
+        window.generateFullFleetPDF = () => {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'mm', 'a4');
+            const today = new Date();
+            doc.setFontSize(20); doc.text("Full Fleet Compliance Report", 14, 15);
+            doc.setFontSize(10); doc.text(`Date Generated: ${today.toLocaleString()}`, 14, 22);
+            const rows = cachedVehicles.map(v => {
+                const minD = getMinDate(v);
+                const diff = minD.getFullYear() === 2099 ? 'N/A' : Math.ceil((minD - today) / (1000 * 60 * 60 * 24));
+                return [v.registration_number, v.mot_due || '-', v.pmi_due || '-', v.road_tax_due || '-', v.brake_test || '-', v.tachograph_service_due || '-', v.is_vor ? 'OFF ROAD' : 'ACTIVE', diff === 'N/A' ? '-' : `${diff} Days`];
+            });
+            doc.autoTable({ startY: 30, head: [['Reg', 'MOT Due', 'PMI Due', 'Road Tax', 'Brake Test', 'Tacho', 'Status', 'Priority']], body: rows, theme: 'grid', headStyles: { fillColor: [225, 29, 72] }, styles: { fontSize: 8 }, didParseCell: function(data) { if (data.column.index === 7 && data.cell.text[0]) { const days = parseInt(data.cell.text[0]); if (days <= 5) data.cell.styles.textColor = [225, 29, 72]; else if (days <= 10) data.cell.styles.textColor = [245, 158, 11]; } } });
+            doc.save(`Fleet_Master_Report_${today.toISOString().split('T')[0]}.pdf`);
         };
 
-        window.addNewVehicle = async function() {
-            const reg = prompt("Enter registration number:").toUpperCase();
-            if (!reg || !supabaseClient) return;
-            await supabaseClient.from('vehicles').upsert({ registration_number: reg }, { onConflict: 'registration_number' });
-            window.loadFleet();
-        };
-
-        window.removeVehicle = async function() {
-            const reg = prompt("Enter registration number to remove:").toUpperCase();
-            if (!reg || !supabaseClient) return;
-            if (confirm(`Remove ${reg} permanently?`)) {
-                await supabaseClient.from('vehicles').delete().eq('registration_number', reg);
-                window.loadFleet();
-            }
-        };
-
-        window.toggleVOR = async function(reg) {
-            const safeId = reg.replace(/\s/g, '');
-            const card = document.getElementById(`card-${safeId}`);
-            if (!card || !supabaseClient) return;
-            const isNowVOR = !card.classList.contains('card-vor');
-            await supabaseClient.from('vehicles').upsert({ registration_number: reg, is_vor: isNowVOR }, { onConflict: 'registration_number' });
-            window.loadFleet();
-        };
-
-        window.saveData = async function(reg, field, inputEl) {
-            if (!supabaseClient) return;
-            const safeId = reg.replace(/\s/g, '');
-            const sync = document.getElementById(`sync-${safeId}`);
-            if (sync) sync.style.opacity = "1";
+        window.generatePDF = (reg) => {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const vData = cachedVehicles.find(v => v.registration_number === reg);
+            const checks = cachedChecks.filter(c => c.registration && c.registration.replace(/\s+/g, '').toUpperCase() === reg.replace(/\s+/g, '').toUpperCase());
             
-            await supabaseClient.from('vehicles').upsert({ registration_number: reg, [field]: inputEl.value }, { onConflict: 'registration_number' });
-            
-            setTimeout(() => { if (sync) sync.style.opacity = "0"; }, 800);
-            window.loadFleet();
+            // Restoration of Header info
+            doc.setFontSize(22);
+            doc.text("Vehicle Compliance & Audit Report", 14, 20);
+            doc.setFontSize(12);
+            doc.setTextColor(100); 
+            doc.text(`Registration: ${reg}`, 14, 30); 
+            doc.text(`VIN: ${vData.vin_number || 'NOT RECORDED'}`, 14, 36);
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 42);
+
+            doc.autoTable({ 
+                startY: 50, 
+                head: [['Maintenance Field', 'Expiry / Due Date']], 
+                body: [
+                    ['MOT Due Date', vData.mot_due || 'Not Set'],
+                    ['PMI Due Date', vData.pmi_due || 'Not Set'],
+                    ['Road Tax Expiry', vData.road_tax_due || 'Not Set'],
+                    ['Brake Test Due', vData.brake_test || 'Not Set'],
+                    ['Tachograph Calibration', vData.tachograph_service_due || 'Not Set'],
+                    ['Status', vData.is_vor ? 'OFF ROAD (VOR)' : 'ACTIVE']
+                ], 
+                theme: 'striped', 
+                headStyles: { fillColor: [225, 29, 72] } 
+            });
+
+            doc.autoTable({ 
+                startY: doc.lastAutoTable.finalY + 15, 
+                head: [['Date/Time', 'Driver/Reporter', 'Status', 'Defect Details / Notes']], 
+                body: checks.map(r => [new Date(r.created_at).toLocaleString(), r.driver_name || 'System', r.condition_status.toUpperCase(), r.defect_details || 'N/A']), 
+                styles: { fontSize: 8 }, 
+                headStyles: { fillColor: [51, 65, 85] } 
+            });
+
+            doc.save(`${reg}_Audit_Report.pdf`);
         };
 
-        window.toggleTheme = function() {
-            const html = document.documentElement;
-            html.classList.toggle('dark');
-            document.getElementById('theme-btn').innerText = html.classList.contains('dark') ? "LIGHT MODE" : "DARK MODE";
+        window.generateReport = (reg, full) => {
+            const vReg = reg.replace(/\s+/g, '').toUpperCase();
+            const reports = cachedChecks.filter(c => c.registration && c.registration.replace(/\s+/g, '').toUpperCase() === vReg);
+            const reportPanel = document.getElementById('report-panel');
+            const latest = reports[0];
+            const isDefective = latest && latest.condition_status.toLowerCase().includes('defect') && !latest.condition_status.toLowerCase().includes('nil');
+            let html = `<div class="font-bold text-rose-500 mb-3 border-b border-slate-700 pb-1">${reg} Status</div>`;
+            if (!full && isDefective) html += `<button onclick="resolveDefect('${reg}')" class="w-full mb-4 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded font-black text-[10px] uppercase transition-all">Mark Defect Resolved</button>`;
+            reports.slice(0, full ? 15 : 3).forEach(r => {
+                const isNil = r.condition_status.toLowerCase().includes('nil');
+                html += `<div class="report-item"><div class="flex justify-between font-bold mb-1"><span class="text-[10px] text-slate-400">${new Date(r.created_at).toLocaleDateString()}</span><span class="${isNil ? 'text-emerald-400' : 'text-rose-400'} text-[9px]">${r.condition_status}</span></div><div class="text-slate-300 text-[10px] italic leading-tight mt-1">${r.defect_details || 'Nil Defect'}</div></div>`;
+            });
+            reportPanel.innerHTML = html;
         };
 
-        window.onload = window.loadFleet;
+        window.resolveDefect = async (reg) => {
+            if (!confirm(`Mark defects for ${reg} as resolved?`)) return;
+            await supabaseClient.from('daily_vehicle_checks').insert([{ registration: reg, condition_status: 'Nil Defect', defect_details: 'Resolved via Portal', driver_name: 'Fleet Manager', created_at: new Date().toISOString() }]);
+            loadFleet();
+        };
+
+        window.save = async (reg, field, val) => { await supabaseClient.from('vehicles').update({ [field]: val }).eq('registration_number', reg); loadFleet(); };
+        window.toggleVOR_Action = async (reg, state) => { await supabaseClient.from('vehicles').update({ is_vor: !state }).eq('registration_number', reg); loadFleet(); };
+        window.addNewVehicle = async () => { const reg = prompt("Reg:").toUpperCase().trim(); if(reg) { await supabaseClient.from('vehicles').upsert({ registration_number: reg }); loadFleet(); } };
+        window.removeVehicle = async (reg) => { if(confirm(`Delete ${reg}?`)) { await supabaseClient.from('vehicles').delete().eq('registration_number', reg); loadFleet(); } };
+
+        function getHealthStatus(v) { 
+            const today = new Date(); let s = 'plate-ok';
+            const dates = [v.mot_due, v.pmi_due, v.road_tax_due, v.tachograph_service_due, v.brake_test];
+            dates.forEach(d => { if(!d) return; const diff = (new Date(d) - today) / (1000 * 60 * 60 * 24); if (diff <= 5) s = 'plate-critical'; else if (diff <= 10 && s !== 'plate-critical') s = 'plate-warn'; });
+            return s;
+        }
+
+        function renderTrailers() {
+            const grid = document.getElementById('fleet-grid'); grid.innerHTML = '';
+            const list = ["FTSTR01","FTSTR02","FTSTR30","FTSTR41","FTSTR42","FTSTR44","FTSTR45","FTSTR46","FTSTR03","FTSTR04","FTSTR05","FTSTR09","FTSTR11","FTSTR12","FTSTR17","FTSTR21","FTSTR22","FTSTR23","FTSTR24","FTSTR25","FTSTR26","FTSTR27","FTSTR28","FTSTR31","FTSTR60","FTSTR61","FTSTR62","FTSTR63","FTSTR64"];
+            document.getElementById('stat-total').innerText = list.length;
+            list.forEach(reg => { const card = document.createElement('div'); card.className = 'glass-card p-6 rounded-xl'; card.innerHTML = `<div class="flex justify-between items-center mb-6"><div class="plate-badge plate-ok">${reg}</div><span class="text-[9px] font-bold text-slate-500">TRAILER</span></div><div class="grid grid-cols-2 gap-4"><div><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">MOT</p><input type="date"></div><div><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">PMI</p><input type="date"></div></div>`; grid.appendChild(card); });
+        }
+
+        supabaseClient.channel('f_sync').on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => loadFleet()).on('postgres_changes', { event: '*', schema: 'public', table: 'daily_vehicle_checks' }, () => loadFleet()).subscribe();
+        window.onload = loadFleet;
     </script>
 </body>
 </html>
