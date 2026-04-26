@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FTSMaintenance v1.6.0 | Management Portal</title>
+    <title>FTSMaintenance v1.6.2 | Management Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -46,7 +46,7 @@
             <h1 class="text-2xl font-black uppercase mb-1">FTS<span class="text-rose-600">Maintenance</span></h1>
             <div class="flex items-center gap-2">
                 <p class="text-[10px] text-slate-500 uppercase tracking-widest font-black">● Live Sync Active</p>
-                <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-bold border border-slate-700">v1.6.0</span>
+                <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-bold border border-slate-700">v1.6.2</span>
             </div>
         </div>
         
@@ -152,9 +152,10 @@
 
         async function loadJCCFiles() {
             const grid = document.getElementById('fleet-grid');
-            grid.innerHTML = '<div class="col-span-full text-center p-10 font-bold animate-pulse text-slate-500 uppercase tracking-widest">Accessing maintenance_records...</div>';
+            grid.innerHTML = '<div class="col-span-full text-center p-10 font-bold animate-pulse text-slate-500 uppercase tracking-widest">Opening maintenance_records/uploads...</div>';
             try {
-                const { data, error } = await supabaseClient.storage.from('maintenance_records').list('', {
+                // Corrected folder name: uploads
+                const { data, error } = await supabaseClient.storage.from('maintenance_records').list('uploads', {
                     limit: 100,
                     sortBy: { column: 'created_at', order: 'desc' }
                 });
@@ -169,16 +170,18 @@
         function renderJCC(files) {
             const grid = document.getElementById('fleet-grid');
             grid.innerHTML = '';
-            const validFiles = files.filter(f => f.id); 
+            const validFiles = files.filter(f => f.id && f.name !== '.emptyFolderPlaceholder'); 
             document.getElementById('stat-total').innerText = validFiles.length;
 
             if (validFiles.length === 0) {
-                grid.innerHTML = `<div class="col-span-full text-center p-20 text-slate-500 font-bold uppercase">No records found.</div>`;
+                grid.innerHTML = `<div class="col-span-full text-center p-20 text-slate-500 font-bold uppercase">No records found in uploads folder.</div>`;
                 return;
             }
 
             validFiles.forEach(file => {
-                const { data: urlData } = supabaseClient.storage.from('maintenance_records').getPublicUrl(file.name);
+                // Corrected link path: uploads/
+                const { data: urlData } = supabaseClient.storage.from('maintenance_records').getPublicUrl(`uploads/${file.name}`);
+                
                 const fileExt = file.metadata.mimetype ? file.metadata.mimetype.split('/')[1].toUpperCase() : 'DOC';
                 
                 const card = document.createElement('div');
