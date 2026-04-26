@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fleet Command v1.4.9 | Management Portal</title>
+    <title>FTSMaintenance v1.5.2 | Management Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -12,29 +12,39 @@
     <style>
         :root { --fleet-red: #e11d48; --fleet-amber: #f59e0b; --fleet-green: #10b981; --bg-main: #0f172a; --sidebar-bg: #1e293b; --card-bg: #1e293b; --text-main: #f1f5f9; --border-color: #334155; }
         .light { --bg-main: #f8fafc; --sidebar-bg: #ffffff; --card-bg: #ffffff; --text-main: #0f172a; --border-color: #e2e8f0; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-main); transition: all 0.3s ease; display: flex; height: 100vh; overflow: hidden; }
-        aside { width: 340px; background: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.5rem; height: 100vh; flex-shrink: 0; }
-        main { flex-grow: 1; height: 100vh; overflow-y: auto; padding: 2rem; }
-        .nav-link { width: 100%; text-align: left; padding: 0.85rem 1rem; border-radius: 0.75rem; font-size: 0.85rem; font-weight: 700; margin-bottom: 0.5rem; color: #94a3b8; transition: all 0.2s; display: flex; align-items: center; gap: 0.75rem; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-main); transition: all 0.3s ease; display: flex; height: 100vh; overflow: hidden; font-size: 16px; }
+        aside { width: 340px; background: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.25rem; height: 100vh; flex-shrink: 0; }
+        main { flex-grow: 1; height: 100vh; overflow-y: auto; padding: 1.5rem; }
+        
+        .nav-link { width: 100%; text-align: left; padding: 0.85rem 1.25rem; border-radius: 0.75rem; font-size: 1rem; font-weight: 700; margin-bottom: 0.4rem; color: #94a3b8; transition: all 0.2s; display: flex; align-items: center; gap: 0.75rem; }
         .nav-link.active { background: var(--fleet-red); color: white; box-shadow: 0 4px 12px rgba(225, 29, 72, 0.3); }
-        .glass-card { background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2); transition: all 0.2s ease; position: relative; overflow: hidden; }
-        .plate-badge { font-weight: 800; padding: 4px 12px; border-radius: 4px; font-size: 0.85rem; display: inline-flex; color: #fff; }
+        
+        /* Compact Card Styling */
+        .glass-card { background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1); transition: all 0.2s ease; position: relative; overflow: hidden; padding: 1rem !important; }
+        .plate-badge { font-weight: 800; padding: 4px 12px; border-radius: 6px; font-size: 0.95rem; display: inline-flex; color: #fff; }
         .plate-ok { background: var(--fleet-green); }
         .plate-warn { background: var(--fleet-amber); color: #000; }
         .plate-critical { background: var(--fleet-red); }
-        .btn-action { font-size: 9px; font-weight: 800; text-transform: uppercase; padding: 5px 8px; border-radius: 4px; border: 1px solid var(--border-color); transition: all 0.3s ease; position: relative; z-index: 20; }
-        .btn-history { background: rgba(51, 65, 85, 0.5); color: #94a3b8; }
+        
+        .btn-action { font-size: 10px; font-weight: 800; text-transform: uppercase; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); transition: all 0.3s ease; position: relative; z-index: 20; }
+        .btn-history { background: rgba(51, 65, 85, 0.5); color: #cbd5e1; }
         .btn-pdf { background: #0ea5e9; color: white; border-color: #0ea5e9; }
+        
+        .label-heading { font-size: 10px; color: #94a3b8; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; display: block; letter-spacing: 0.025em; }
+        input[type="date"], .input-text { background: rgba(0,0,0,0.1); border-radius: 4px; padding: 4px 6px; border: 1px solid var(--border-color); color: inherit; font-size: 0.9rem; font-weight: 600; width: 100%; outline: none; }
+        
         .defect-active { background: var(--fleet-amber); color: #000; border-color: var(--fleet-amber); animation: pulse-border 2s infinite; cursor: pointer; }
         @keyframes pulse-border { 0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); } 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
-        .vor-stamp { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-15deg); border: 4px solid var(--fleet-red); color: var(--fleet-red); padding: 4px 20px; font-weight: 900; font-size: 1.5rem; opacity: 0; pointer-events: none; background: var(--card-bg); z-index: 10; }
+        
+        .vor-stamp { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-15deg); border: 4px solid var(--fleet-red); color: var(--fleet-red); padding: 4px 18px; font-weight: 900; font-size: 1.5rem; opacity: 0; pointer-events: none; background: var(--card-bg); z-index: 10; }
         .card-vor .vor-stamp { opacity: 0.9; }
         .card-vor .content-fade { opacity: 0.3; filter: grayscale(1); }
-        .grid-layout { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.5rem; }
-        input[type="date"], .input-text { background: rgba(0,0,0,0.1); border-radius: 4px; padding: 4px 6px; border: 1px solid var(--border-color); color: inherit; font-size: 0.75rem; font-weight: 600; width: 100%; outline: none; }
-        #report-panel { background: rgba(0,0,0,0.1); border: 1px dashed var(--border-color); border-radius: 0.75rem; padding: 1rem; font-size: 0.75rem; margin-top: 1rem; max-height: 420px; overflow-y: auto; }
+        
+        .grid-layout { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1rem; }
+        
+        #report-panel { background: rgba(0,0,0,0.1); border: 1px dashed var(--border-color); border-radius: 0.75rem; padding: 1rem; font-size: 0.85rem; margin-top: 0.75rem; max-height: 350px; overflow-y: auto; }
         .report-item { margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color); }
-        .sort-btn { background: #334155; color: #94a3b8; border: 1px solid #475569; padding: 0.5rem; border-radius: 0.5rem; font-size: 10px; font-weight: 800; width: 100%; text-align: center; cursor: pointer; transition: 0.2s; }
+        .sort-btn { background: #334155; color: #cbd5e1; border: 1px solid #475569; padding: 0.5rem; border-radius: 0.5rem; font-size: 11px; font-weight: 800; width: 100%; text-align: center; cursor: pointer; transition: 0.2s; }
         .sort-btn.active { background: #475569; color: white; border-color: #94a3b8; }
     </style>
 </head>
@@ -42,10 +52,10 @@
 
     <aside>
         <div class="mb-6">
-            <h1 class="text-xl font-black uppercase mb-1">Fleet<span class="text-rose-600">Command</span></h1>
+            <h1 class="text-2xl font-black uppercase mb-1">FTS<span class="text-rose-600">Maintenance</span></h1>
             <div class="flex items-center gap-2">
-                <p class="text-[9px] text-slate-500 uppercase tracking-widest font-black">● Live Sync Active</p>
-                <span class="text-[8px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-bold border border-slate-700">v1.4.9</span>
+                <p class="text-[10px] text-slate-500 uppercase tracking-widest font-black">● Live Sync Active</p>
+                <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-bold border border-slate-700">v1.5.2</span>
             </div>
         </div>
         
@@ -55,7 +65,7 @@
         </nav>
 
         <div class="mb-6">
-            <p class="text-[9px] text-slate-500 font-black uppercase mb-2">Sorting Preference</p>
+            <p class="text-[10px] text-slate-500 font-black uppercase mb-2">Sorting Preference</p>
             <div class="flex gap-2">
                 <button id="sort-alpha" onclick="setSort('alpha')" class="sort-btn active">A-Z</button>
                 <button id="sort-date" onclick="setSort('date')" class="sort-btn">DUE DATE</button>
@@ -63,17 +73,20 @@
         </div>
 
         <div class="flex-grow">
-            <button onclick="toggleMode()" class="w-full text-left p-3 rounded-lg hover:bg-slate-800 transition text-xs font-bold text-slate-400 mb-2">◐ Toggle Day/Night</button>
-            <div class="mt-4">
-                <span id="panel-title" class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Audit Trail</span>
-                <div id="report-panel"><p class="text-slate-500 italic text-[10px]">Select card for details.</p></div>
+            <button onclick="toggleMode()" class="w-full text-left p-3 rounded-lg hover:bg-slate-800 transition text-sm font-bold text-slate-400 mb-2">◐ Toggle Day/Night</button>
+            <div class="mt-2">
+                <span class="text-[11px] font-black text-slate-500 uppercase tracking-widest">Audit Trail</span>
+                <div id="report-panel"><p class="text-slate-500 italic">Select card for details.</p></div>
             </div>
         </div>
 
-        <div class="pt-6 border-t border-slate-700">
-            <div class="bg-slate-800/40 p-3 rounded-lg mb-4 flex justify-between items-center"><span class="text-[10px] text-slate-500 font-bold uppercase">Total Units</span><span id="stat-total" class="text-lg font-black">--</span></div>
-            <button onclick="generateFullFleetPDF()" class="w-full bg-slate-700 text-white py-3 rounded-xl text-[10px] font-black hover:bg-slate-600 transition-all uppercase mb-2">Generate Fleet Report</button>
-            <button onclick="window.addNewVehicle()" class="w-full bg-rose-600 text-white py-3 rounded-xl text-xs font-bold hover:bg-rose-500 transition-all uppercase">+ Add Unit</button>
+        <div class="pt-4 border-t border-slate-700">
+            <div class="bg-slate-800/40 p-3 rounded-lg mb-3 flex justify-between items-center">
+                <span class="text-[11px] text-slate-500 font-bold uppercase">Total Units</span>
+                <span id="stat-total" class="text-xl font-black">--</span>
+            </div>
+            <button onclick="generateFullFleetPDF()" class="w-full bg-slate-700 text-white py-3 rounded-xl text-[11px] font-black hover:bg-slate-600 transition-all uppercase mb-2">Generate Fleet Report</button>
+            <button onclick="window.addNewVehicle()" class="w-full bg-rose-600 text-white py-3.5 rounded-xl text-sm font-bold hover:bg-rose-500 transition-all uppercase">+ Add Unit</button>
         </div>
     </aside>
 
@@ -121,8 +134,39 @@
                 const latestCheck = cachedChecks.find(c => c.registration && c.registration.replace(/\s+/g, '').toUpperCase() === vReg);
                 let hasActiveDefect = latestCheck && latestCheck.condition_status.toLowerCase().includes('defect') && !latestCheck.condition_status.toLowerCase().includes('nil');
                 const card = document.createElement('div');
-                card.className = `glass-card p-6 rounded-xl ${v.is_vor ? 'card-vor' : ''}`;
-                card.innerHTML = `<div class="vor-stamp">OFF ROAD</div><div class="flex justify-between items-center mb-6 relative z-30"><div class="flex flex-wrap items-center gap-2"><div class="plate-badge ${getHealthStatus(v)}">${v.registration_number}</div><button onclick="generatePDF('${v.registration_number}')" class="btn-action btn-pdf">PDF Report</button><button onclick="generateReport('${v.registration_number}', true)" class="btn-action btn-history">History</button><button onclick="generateReport('${v.registration_number}', false)" class="btn-action ${hasActiveDefect ? 'defect-active' : ''}">${hasActiveDefect ? 'Defect Active' : 'Clear'}</button></div><button onclick="toggleVOR_Action('${v.registration_number}', ${v.is_vor})" class="btn-action ${v.is_vor ? 'text-rose-500 font-black' : 'text-slate-500'}">${v.is_vor ? '● Active' : '○ VOR'}</button></div><div class="content-fade"><div class="mb-4"><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">VIN Number</p><input type="text" class="input-text" value="${v.vin_number || ''}" onchange="window.save('${v.registration_number}', 'vin_number', this.value)"></div><div class="grid grid-cols-2 gap-x-4 gap-y-4"><div><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">MOT Due</p><input type="date" value="${v.mot_due || ''}" onchange="window.save('${v.registration_number}', 'mot_due', this.value)"></div><div><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">PMI Due</p><input type="date" value="${v.pmi_due || ''}" onchange="window.save('${v.registration_number}', 'pmi_due', this.value)"></div><div><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">Road Tax</p><input type="date" value="${v.road_tax_due || ''}" onchange="window.save('${v.registration_number}', 'road_tax_due', this.value)"></div><div><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">Brake Test</p><input type="date" value="${v.brake_test || ''}" onchange="window.save('${v.registration_number}', 'brake_test', this.value)"></div></div><div class="mt-4 pt-4 border-t border-slate-700/50 flex justify-between items-end"><div class="flex-1"><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">Tachograph Calibration</p><input type="date" class="max-w-[160px]" value="${v.tachograph_service_due || ''}" onchange="window.save('${v.registration_number}', 'tachograph_service_due', this.value)"></div><button onclick="window.removeVehicle('${v.registration_number}')" class="text-slate-600 hover:text-rose-500 transition-colors mb-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button></div></div>`;
+                card.className = `glass-card rounded-xl ${v.is_vor ? 'card-vor' : ''}`;
+                card.innerHTML = `
+                    <div class="vor-stamp">OFF ROAD</div>
+                    <div class="flex justify-between items-center mb-3 relative z-30">
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <div class="plate-badge ${getHealthStatus(v)}">${v.registration_number}</div>
+                            <button onclick="generatePDF('${v.registration_number}')" class="btn-action btn-pdf">PDF</button>
+                            <button onclick="generateReport('${v.registration_number}', true)" class="btn-action btn-history">History</button>
+                            <button onclick="generateReport('${v.registration_number}', false)" class="btn-action ${hasActiveDefect ? 'defect-active' : ''}">${hasActiveDefect ? 'Defect' : 'Clear'}</button>
+                        </div>
+                        <button onclick="toggleVOR_Action('${v.registration_number}', ${v.is_vor})" class="btn-action ${v.is_vor ? 'text-rose-500 font-black' : 'text-slate-500'}">${v.is_vor ? '● Active' : '○ VOR'}</button>
+                    </div>
+                    <div class="content-fade">
+                        <div class="mb-3">
+                            <span class="label-heading">VIN Number</span>
+                            <input type="text" class="input-text" value="${v.vin_number || ''}" onchange="window.save('${v.registration_number}', 'vin_number', this.value)">
+                        </div>
+                        <div class="grid grid-cols-2 gap-x-3 gap-y-3">
+                            <div><span class="label-heading">MOT Due</span><input type="date" value="${v.mot_due || ''}" onchange="window.save('${v.registration_number}', 'mot_due', this.value)"></div>
+                            <div><span class="label-heading">PMI Due</span><input type="date" value="${v.pmi_due || ''}" onchange="window.save('${v.registration_number}', 'pmi_due', this.value)"></div>
+                            <div><span class="label-heading">Road Tax</span><input type="date" value="${v.road_tax_due || ''}" onchange="window.save('${v.registration_number}', 'road_tax_due', this.value)"></div>
+                            <div><span class="label-heading">Brake Test</span><input type="date" value="${v.brake_test || ''}" onchange="window.save('${v.registration_number}', 'brake_test', this.value)"></div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-end">
+                            <div class="flex-1">
+                                <span class="label-heading">Tachograph Calibration</span>
+                                <input type="date" class="max-w-[170px]" value="${v.tachograph_service_due || ''}" onchange="window.save('${v.registration_number}', 'tachograph_service_due', this.value)">
+                            </div>
+                            <button onclick="window.removeVehicle('${v.registration_number}')" class="text-slate-600 hover:text-rose-500 transition-colors mb-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                        </div>
+                    </div>`;
                 grid.appendChild(card);
             });
         }
@@ -137,7 +181,7 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('l', 'mm', 'a4');
             const today = new Date();
-            doc.setFontSize(20); doc.text("Full Fleet Compliance Report", 14, 15);
+            doc.setFontSize(20); doc.text("FTSMaintenance - Full Fleet Compliance Report", 14, 15);
             doc.setFontSize(10); doc.text(`Date Generated: ${today.toLocaleString()}`, 14, 22);
             const rows = cachedVehicles.map(v => {
                 const minD = getMinDate(v);
@@ -145,7 +189,7 @@
                 return [v.registration_number, v.mot_due || '-', v.pmi_due || '-', v.road_tax_due || '-', v.brake_test || '-', v.tachograph_service_due || '-', v.is_vor ? 'OFF ROAD' : 'ACTIVE', diff === 'N/A' ? '-' : `${diff} Days`];
             });
             doc.autoTable({ startY: 30, head: [['Reg', 'MOT Due', 'PMI Due', 'Road Tax', 'Brake Test', 'Tacho', 'Status', 'Priority']], body: rows, theme: 'grid', headStyles: { fillColor: [225, 29, 72] }, styles: { fontSize: 8 }, didParseCell: function(data) { if (data.column.index === 7 && data.cell.text[0]) { const days = parseInt(data.cell.text[0]); if (days <= 5) data.cell.styles.textColor = [225, 29, 72]; else if (days <= 10) data.cell.styles.textColor = [245, 158, 11]; } } });
-            doc.save(`Fleet_Master_Report_${today.toISOString().split('T')[0]}.pdf`);
+            doc.save(`FTS_Fleet_Report_${today.toISOString().split('T')[0]}.pdf`);
         };
 
         window.generatePDF = (reg) => {
@@ -153,40 +197,14 @@
             const doc = new jsPDF();
             const vData = cachedVehicles.find(v => v.registration_number === reg);
             const checks = cachedChecks.filter(c => c.registration && c.registration.replace(/\s+/g, '').toUpperCase() === reg.replace(/\s+/g, '').toUpperCase());
-            
-            // Restoration of Header info
-            doc.setFontSize(22);
-            doc.text("Vehicle Compliance & Audit Report", 14, 20);
-            doc.setFontSize(12);
-            doc.setTextColor(100); 
+            doc.setFontSize(22); doc.text("FTSMaintenance - Vehicle Compliance & Audit", 14, 20);
+            doc.setFontSize(12); doc.setTextColor(100); 
             doc.text(`Registration: ${reg}`, 14, 30); 
             doc.text(`VIN: ${vData.vin_number || 'NOT RECORDED'}`, 14, 36);
             doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 42);
-
-            doc.autoTable({ 
-                startY: 50, 
-                head: [['Maintenance Field', 'Expiry / Due Date']], 
-                body: [
-                    ['MOT Due Date', vData.mot_due || 'Not Set'],
-                    ['PMI Due Date', vData.pmi_due || 'Not Set'],
-                    ['Road Tax Expiry', vData.road_tax_due || 'Not Set'],
-                    ['Brake Test Due', vData.brake_test || 'Not Set'],
-                    ['Tachograph Calibration', vData.tachograph_service_due || 'Not Set'],
-                    ['Status', vData.is_vor ? 'OFF ROAD (VOR)' : 'ACTIVE']
-                ], 
-                theme: 'striped', 
-                headStyles: { fillColor: [225, 29, 72] } 
-            });
-
-            doc.autoTable({ 
-                startY: doc.lastAutoTable.finalY + 15, 
-                head: [['Date/Time', 'Driver/Reporter', 'Status', 'Defect Details / Notes']], 
-                body: checks.map(r => [new Date(r.created_at).toLocaleString(), r.driver_name || 'System', r.condition_status.toUpperCase(), r.defect_details || 'N/A']), 
-                styles: { fontSize: 8 }, 
-                headStyles: { fillColor: [51, 65, 85] } 
-            });
-
-            doc.save(`${reg}_Audit_Report.pdf`);
+            doc.autoTable({ startY: 50, head: [['Maintenance Field', 'Expiry / Due Date']], body: [['MOT Due Date', vData.mot_due || 'Not Set'],['PMI Due Date', vData.pmi_due || 'Not Set'],['Road Tax Expiry', vData.road_tax_due || 'Not Set'],['Brake Test Due', vData.brake_test || 'Not Set'],['Tachograph Calibration', vData.tachograph_service_due || 'Not Set'],['Status', vData.is_vor ? 'OFF ROAD (VOR)' : 'ACTIVE']], theme: 'striped', headStyles: { fillColor: [225, 29, 72] } });
+            doc.autoTable({ startY: doc.lastAutoTable.finalY + 15, head: [['Date/Time', 'Driver/Reporter', 'Status', 'Defect Details / Notes']], body: checks.map(r => [new Date(r.created_at).toLocaleString(), r.driver_name || 'System', r.condition_status.toUpperCase(), r.defect_details || 'N/A']), styles: { fontSize: 8 }, headStyles: { fillColor: [51, 65, 85] } });
+            doc.save(`${reg}_FTS_Audit.pdf`);
         };
 
         window.generateReport = (reg, full) => {
@@ -195,11 +213,11 @@
             const reportPanel = document.getElementById('report-panel');
             const latest = reports[0];
             const isDefective = latest && latest.condition_status.toLowerCase().includes('defect') && !latest.condition_status.toLowerCase().includes('nil');
-            let html = `<div class="font-bold text-rose-500 mb-3 border-b border-slate-700 pb-1">${reg} Status</div>`;
-            if (!full && isDefective) html += `<button onclick="resolveDefect('${reg}')" class="w-full mb-4 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded font-black text-[10px] uppercase transition-all">Mark Defect Resolved</button>`;
+            let html = `<div class="font-bold text-rose-500 mb-2 border-b border-slate-700 pb-1">${reg} Status</div>`;
+            if (!full && isDefective) html += `<button onclick="resolveDefect('${reg}')" class="w-full mb-3 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded font-black text-xs uppercase transition-all">Mark Resolved</button>`;
             reports.slice(0, full ? 15 : 3).forEach(r => {
                 const isNil = r.condition_status.toLowerCase().includes('nil');
-                html += `<div class="report-item"><div class="flex justify-between font-bold mb-1"><span class="text-[10px] text-slate-400">${new Date(r.created_at).toLocaleDateString()}</span><span class="${isNil ? 'text-emerald-400' : 'text-rose-400'} text-[9px]">${r.condition_status}</span></div><div class="text-slate-300 text-[10px] italic leading-tight mt-1">${r.defect_details || 'Nil Defect'}</div></div>`;
+                html += `<div class="report-item"><div class="flex justify-between font-bold mb-1"><span class="text-[11px] text-slate-400">${new Date(r.created_at).toLocaleDateString()}</span><span class="${isNil ? 'text-emerald-400' : 'text-rose-400'} text-[10px]">${r.condition_status}</span></div><div class="text-slate-300 text-[11px] italic leading-tight mt-1">${r.defect_details || 'Nil Defect'}</div></div>`;
             });
             reportPanel.innerHTML = html;
         };
@@ -226,7 +244,7 @@
             const grid = document.getElementById('fleet-grid'); grid.innerHTML = '';
             const list = ["FTSTR01","FTSTR02","FTSTR30","FTSTR41","FTSTR42","FTSTR44","FTSTR45","FTSTR46","FTSTR03","FTSTR04","FTSTR05","FTSTR09","FTSTR11","FTSTR12","FTSTR17","FTSTR21","FTSTR22","FTSTR23","FTSTR24","FTSTR25","FTSTR26","FTSTR27","FTSTR28","FTSTR31","FTSTR60","FTSTR61","FTSTR62","FTSTR63","FTSTR64"];
             document.getElementById('stat-total').innerText = list.length;
-            list.forEach(reg => { const card = document.createElement('div'); card.className = 'glass-card p-6 rounded-xl'; card.innerHTML = `<div class="flex justify-between items-center mb-6"><div class="plate-badge plate-ok">${reg}</div><span class="text-[9px] font-bold text-slate-500">TRAILER</span></div><div class="grid grid-cols-2 gap-4"><div><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">MOT</p><input type="date"></div><div><p class="text-[9px] text-slate-500 font-bold uppercase mb-1">PMI</p><input type="date"></div></div>`; grid.appendChild(card); });
+            list.forEach(reg => { const card = document.createElement('div'); card.className = 'glass-card rounded-xl'; card.innerHTML = `<div class="flex justify-between items-center mb-3"><div class="plate-badge plate-ok">${reg}</div><span class="text-[11px] font-bold text-slate-500">TRAILER</span></div><div class="grid grid-cols-2 gap-3"><div><span class="label-heading">MOT</span><input type="date"></div><div><span class="label-heading">PMI</span><input type="date"></div></div>`; grid.appendChild(card); });
         }
 
         supabaseClient.channel('f_sync').on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => loadFleet()).on('postgres_changes', { event: '*', schema: 'public', table: 'daily_vehicle_checks' }, () => loadFleet()).subscribe();
