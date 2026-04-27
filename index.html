@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FTSMaintenance v1.6.2 | Management Portal</title>
+    <title>FTSMaintenance v1.8.3 | Management Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -37,6 +37,7 @@
         .report-item { margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color); }
         .sort-btn { background: #334155; color: #cbd5e1; border: 1px solid #475569; padding: 0.5rem; border-radius: 0.5rem; font-size: 11px; font-weight: 800; width: 100%; text-align: center; cursor: pointer; transition: 0.2s; }
         .sort-btn.active { background: #475569; color: white; border-color: #94a3b8; }
+        .folder-card { cursor: pointer; border-left: 4px solid var(--fleet-red); }
     </style>
 </head>
 <body class="dark">
@@ -46,13 +47,13 @@
             <h1 class="text-2xl font-black uppercase mb-1">FTS<span class="text-rose-600">Maintenance</span></h1>
             <div class="flex items-center gap-2">
                 <p class="text-[10px] text-slate-500 uppercase tracking-widest font-black">● Live Sync Active</p>
-                <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-bold border border-slate-700">v1.6.2</span>
+                <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-bold border border-slate-700">v1.8.3</span>
             </div>
         </div>
         
         <nav class="mb-4">
-            <button id="nav-v" onclick="switchTab('vehicle')" class="nav-link active">VEHICLES</button>
-            <button id="nav-t" onclick="switchTab('trailer')" class="nav-link">TRAILERS</button>
+            <button id="nav-vehicle" onclick="switchTab('vehicle')" class="nav-link active">VEHICLES</button>
+            <button id="nav-trailer" onclick="switchTab('trailer')" class="nav-link">TRAILERS</button>
             <button id="nav-jcc" onclick="switchTab('jcc')" class="nav-link">JCC CONNECT</button>
         </nav>
 
@@ -85,8 +86,12 @@
     </aside>
 
     <main>
-        <div id="jcc-search-container" class="hidden mb-6">
-            <input type="text" id="jcc-search" oninput="filterJCC(this.value)" placeholder="Search Registration (e.g. FT70)..." class="w-full bg-slate-800 border border-slate-700 p-4 rounded-xl text-white font-bold outline-none focus:border-rose-600 transition-all">
+        <div id="jcc-header" class="hidden mb-6 flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <button id="jcc-back" onclick="loadJCCFiles()" class="hidden bg-slate-800 text-slate-300 px-4 py-2 rounded-lg font-bold text-xs uppercase hover:bg-slate-700">← All Directories</button>
+                <h2 id="jcc-current-path" class="text-xl font-black uppercase text-slate-400">JCC Docs</h2>
+            </div>
+            <input type="text" id="jcc-search" oninput="filterJCC(this.value)" placeholder="Search files..." class="bg-slate-800 border border-slate-700 px-4 py-2 rounded-lg text-sm text-white outline-none focus:border-rose-600">
         </div>
         <div id="fleet-grid" class="grid-layout"></div>
     </main>
@@ -107,28 +112,31 @@
         
         function switchTab(tab) { 
             currentTab = tab; 
-            document.getElementById('nav-v').classList.toggle('active', tab === 'vehicle'); 
-            document.getElementById('nav-t').classList.toggle('active', tab === 'trailer'); 
-            document.getElementById('nav-jcc').classList.toggle('active', tab === 'jcc');
+            localStorage.setItem('fts_current_tab', tab);
+            
+            ['vehicle', 'trailer', 'jcc'].forEach(t => {
+                const btn = document.getElementById(`nav-${t}`);
+                if(btn) btn.classList.toggle('active', tab === t);
+            });
             
             const addBtn = document.getElementById('add-unit-btn');
             const reportBtn = document.getElementById('btn-fleet-report');
             const controls = document.getElementById('sidebar-controls');
-            const search = document.getElementById('jcc-search-container');
+            const jccHeader = document.getElementById('jcc-header');
             const statLabel = document.getElementById('stat-label');
 
             if(tab === 'jcc') {
                 addBtn.style.display = 'none';
                 reportBtn.style.display = 'none';
                 controls.style.display = 'none';
-                search.classList.remove('hidden');
-                statLabel.innerText = "DOCUMENTS";
+                jccHeader.classList.remove('hidden');
+                statLabel.innerText = "FOLDERS";
                 loadJCCFiles();
             } else {
                 addBtn.style.display = 'block';
                 reportBtn.style.display = 'block';
                 controls.style.display = 'block';
-                search.classList.add('hidden');
+                jccHeader.classList.add('hidden');
                 statLabel.innerText = "TOTAL UNITS";
                 loadFleet(); 
             }
@@ -151,60 +159,69 @@
         }
 
         async function loadJCCFiles() {
+            document.getElementById('jcc-back').classList.add('hidden');
+            document.getElementById('jcc-current-path').innerText = "Directories";
             const grid = document.getElementById('fleet-grid');
-            grid.innerHTML = '<div class="col-span-full text-center p-10 font-bold animate-pulse text-slate-500 uppercase tracking-widest">Opening maintenance_records/uploads...</div>';
+            grid.innerHTML = '<div class="col-span-full text-center p-10 font-bold animate-pulse text-slate-500 uppercase tracking-widest">Scanning Bucket...</div>';
+            
             try {
-                // Corrected folder name: uploads
-                const { data, error } = await supabaseClient.storage.from('maintenance_records').list('uploads', {
-                    limit: 100,
-                    sortBy: { column: 'created_at', order: 'desc' }
-                });
+                const { data, error } = await supabaseClient.storage.from('maintenance_docs').list('', { limit: 100 });
                 if (error) throw error;
-                cachedJCCFiles = data || [];
-                renderJCC(cachedJCCFiles);
+                const folders = (data || []).filter(f => !f.id && f.name !== '.emptyFolderPlaceholder');
+                renderJCCFolders(folders);
             } catch (err) {
-                grid.innerHTML = `<div class="col-span-full text-center p-10 text-rose-500 font-bold">Error: ${err.message}</div>`;
+                grid.innerHTML = `<div class="col-span-full text-center p-10 text-rose-500 font-bold uppercase">Storage Access Error: ${err.message}</div>`;
             }
         }
 
-        function renderJCC(files) {
+        async function openJCCFolder(folderName) {
+            document.getElementById('jcc-back').classList.remove('hidden');
+            document.getElementById('jcc-current-path').innerText = folderName;
+            const grid = document.getElementById('fleet-grid');
+            grid.innerHTML = '<div class="col-span-full text-center p-10 font-bold animate-pulse text-slate-500 uppercase tracking-widest">Opening '+folderName+'...</div>';
+
+            try {
+                const { data, error } = await supabaseClient.storage.from('maintenance_docs').list(folderName, { limit: 100 });
+                if (error) throw error;
+                cachedJCCFiles = (data || []).filter(f => f.id !== null);
+                renderJCCFiles(cachedJCCFiles, folderName);
+            } catch (err) {
+                grid.innerHTML = `<div class="col-span-full text-center p-10 text-rose-500 font-bold uppercase">Folder Error: ${err.message}</div>`;
+            }
+        }
+
+        function renderJCCFolders(folders) {
             const grid = document.getElementById('fleet-grid');
             grid.innerHTML = '';
-            const validFiles = files.filter(f => f.id && f.name !== '.emptyFolderPlaceholder'); 
-            document.getElementById('stat-total').innerText = validFiles.length;
+            document.getElementById('stat-total').innerText = folders.length;
+            if (folders.length === 0) { grid.innerHTML = '<div class="col-span-full text-center p-10 text-slate-500 font-bold uppercase">No folders found.</div>'; return; }
+            folders.forEach(f => {
+                const card = document.createElement('div');
+                card.className = "glass-card folder-card rounded-xl p-6 flex flex-col items-center justify-center text-center gap-3";
+                card.onclick = () => openJCCFolder(f.name);
+                card.innerHTML = `<svg class="w-10 h-10 text-rose-600/50" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg><span class="font-black text-lg uppercase text-slate-200 tracking-tight">${f.name}</span><span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Open Folder</span>`;
+                grid.appendChild(card);
+            });
+        }
 
-            if (validFiles.length === 0) {
-                grid.innerHTML = `<div class="col-span-full text-center p-20 text-slate-500 font-bold uppercase">No records found in uploads folder.</div>`;
-                return;
-            }
-
-            validFiles.forEach(file => {
-                // Corrected link path: uploads/
-                const { data: urlData } = supabaseClient.storage.from('maintenance_records').getPublicUrl(`uploads/${file.name}`);
-                
-                const fileExt = file.metadata.mimetype ? file.metadata.mimetype.split('/')[1].toUpperCase() : 'DOC';
-                
+        function renderJCCFiles(files, folder) {
+            const grid = document.getElementById('fleet-grid');
+            grid.innerHTML = '';
+            document.getElementById('stat-total').innerText = files.length;
+            if (files.length === 0) { grid.innerHTML = '<div class="col-span-full text-center p-10 text-slate-500 font-bold uppercase">No files found.</div>'; return; }
+            files.forEach(file => {
+                const { data: urlData } = supabaseClient.storage.from('maintenance_docs').getPublicUrl(`${folder}/${file.name}`);
+                const fileExt = file.name.split('.').pop().toUpperCase();
                 const card = document.createElement('div');
                 card.className = "glass-card rounded-xl flex flex-col justify-between border-l-4 border-l-rose-600";
-                card.innerHTML = `
-                    <div>
-                        <div class="flex justify-between items-start mb-2">
-                            <span class="label-heading">Uploaded: ${new Date(file.created_at).toLocaleDateString()}</span>
-                            <span class="text-[9px] bg-slate-800 px-2 py-0.5 rounded text-rose-400 font-black border border-slate-700">${fileExt}</span>
-                        </div>
-                        <h3 class="font-black text-sm break-all uppercase text-slate-200 tracking-tight">${file.name}</h3>
-                    </div>
-                    <div class="mt-4 pt-3 border-t border-slate-700/50">
-                        <a href="${urlData.publicUrl}" target="_blank" class="block w-full bg-slate-700 text-white text-center py-2.5 rounded-lg text-[10px] font-black uppercase hover:bg-rose-600 transition-all">View Document</a>
-                    </div>
-                `;
+                card.innerHTML = `<div><div class="flex justify-between items-start mb-2"><span class="label-heading">Date: ${new Date(file.created_at).toLocaleDateString()}</span><span class="text-[9px] bg-slate-800 px-2 py-0.5 rounded text-rose-400 font-black border border-slate-700">${fileExt}</span></div><h3 class="font-black text-sm break-all uppercase text-slate-200 tracking-tight">${file.name}</h3></div><div class="mt-4 pt-3 border-t border-slate-700/50"><a href="${urlData.publicUrl}" target="_blank" class="block w-full bg-rose-600 text-white text-center py-2.5 rounded-lg text-[10px] font-black uppercase hover:bg-rose-500 transition-all">View Document</a></div>`;
                 grid.appendChild(card);
             });
         }
 
         function filterJCC(query) {
             const filtered = cachedJCCFiles.filter(f => f.name.toUpperCase().includes(query.toUpperCase()));
-            renderJCC(filtered);
+            renderJCCFiles(filtered, document.getElementById('jcc-current-path').innerText);
         }
 
         function renderFleet() {
@@ -213,12 +230,8 @@
             grid.innerHTML = '';
             let data = currentTab === 'vehicle' ? [...cachedVehicles] : [...cachedTrailers];
             document.getElementById('stat-total').innerText = data.length;
-
-            if (sortMode === 'alpha') {
-                data.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
-            } else {
-                data.sort((a, b) => getMinDate(a) - getMinDate(b));
-            }
+            if (sortMode === 'alpha') data.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
+            else data.sort((a, b) => getMinDate(a) - getMinDate(b));
 
             data.forEach(v => {
                 const vReg = v.registration_number.replace(/\s+/g, '').toUpperCase();
@@ -269,14 +282,52 @@
             doc.save(`FTS_${isTrailer ? 'Trailer' : 'Vehicle'}_Report.pdf`);
         };
 
+        // --- RESTORED v1.8.1 PERFECT PDF LOGIC ---
         window.generatePDF = (reg) => {
-            const { jsPDF } = window.jspdf; const doc = new jsPDF();
+            const { jsPDF } = window.jspdf; 
+            const doc = new jsPDF();
             const vData = cachedVehicles.find(v => v.registration_number === reg);
             const checks = cachedChecks.filter(c => c.registration && c.registration.replace(/\s+/g, '').toUpperCase() === reg.replace(/\s+/g, '').toUpperCase());
-            doc.setFontSize(22); doc.text("FTSMaintenance - Vehicle Compliance & Audit", 14, 20);
-            doc.setFontSize(12); doc.setTextColor(100); doc.text(`Registration: ${reg}`, 14, 30); doc.text(`VIN: ${vData.vin_number || 'NOT RECORDED'}`, 14, 36); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 42);
-            doc.autoTable({ startY: 50, head: [['Maintenance Field', 'Expiry / Due Date']], body: [['MOT Due Date', vData.mot_due || 'Not Set'],['PMI Due Date', vData.pmi_due || 'Not Set'],['Road Tax Expiry', vData.road_tax_due || 'Not Set'],['Brake Test Due', vData.brake_test || 'Not Set'],['Tachograph Calibration', vData.tachograph_service_due || 'Not Set'],['Status', vData.is_vor ? 'OFF ROAD (VOR)' : 'ACTIVE']], theme: 'striped', headStyles: { fillColor: [225, 29, 72] } });
-            doc.autoTable({ startY: doc.lastAutoTable.finalY + 15, head: [['Date/Time', 'Driver/Reporter', 'Status', 'Defect Details / Notes']], body: checks.map(r => [new Date(r.created_at).toLocaleString(), r.driver_name || 'System', r.condition_status.toUpperCase(), r.defect_details || 'N/A']), styles: { fontSize: 8 }, headStyles: { fillColor: [51, 65, 85] } });
+            
+            // Header Section
+            doc.setFontSize(22); 
+            doc.text("FTSMaintenance - Vehicle Compliance & Audit", 14, 20);
+            doc.setFontSize(12); 
+            doc.setTextColor(100); 
+            doc.text(`Registration: ${reg}`, 14, 30); 
+            doc.text(`VIN: ${vData.vin_number || 'NOT RECORDED'}`, 14, 36); 
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 42);
+            
+            // Main Table
+            doc.autoTable({ 
+                startY: 50, 
+                head: [['Maintenance Field', 'Expiry / Due Date']], 
+                body: [
+                    ['MOT Due Date', vData.mot_due || 'Not Set'],
+                    ['PMI Due Date', vData.pmi_due || 'Not Set'],
+                    ['Road Tax Expiry', vData.road_tax_due || 'Not Set'],
+                    ['Brake Test Due', vData.brake_test || 'Not Set'],
+                    ['Tachograph Calibration', vData.tachograph_service_due || 'Not Set'],
+                    ['Status', vData.is_vor ? 'OFF ROAD (VOR)' : 'ACTIVE']
+                ], 
+                theme: 'striped', 
+                headStyles: { fillColor: [225, 29, 72] } 
+            });
+            
+            // Audit Table
+            doc.autoTable({ 
+                startY: doc.lastAutoTable.finalY + 15, 
+                head: [['Date/Time', 'Driver/Reporter', 'Status', 'Defect Details / Notes']], 
+                body: checks.map(r => [
+                    new Date(r.created_at).toLocaleString(), 
+                    r.driver_name || 'System', 
+                    r.condition_status.toUpperCase(), 
+                    r.defect_details || 'N/A'
+                ]), 
+                styles: { fontSize: 8 }, 
+                headStyles: { fillColor: [51, 65, 85] } 
+            });
+            
             doc.save(`${reg}_FTS_Audit.pdf`);
         };
 
@@ -317,7 +368,11 @@
             .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_vehicle_checks' }, () => loadFleet())
             .subscribe();
             
-        window.onload = loadFleet;
+        window.onload = () => {
+            const lastTab = localStorage.getItem('fts_current_tab');
+            if (lastTab) switchTab(lastTab);
+            else loadFleet();
+        };
     </script>
 </body>
 </html>
