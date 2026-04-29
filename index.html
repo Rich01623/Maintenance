@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FTSMaintenance v1.8.3 | Management Portal</title>
+    <title>FTSMaintenance | Management Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -25,8 +25,10 @@
         .btn-action { font-size: 10px; font-weight: 800; text-transform: uppercase; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); transition: all 0.3s ease; position: relative; z-index: 20; }
         .btn-history { background: rgba(51, 65, 85, 0.5); color: #cbd5e1; }
         .btn-pdf { background: #0ea5e9; color: white; border-color: #0ea5e9; }
+        .btn-compliance { background: var(--fleet-red); color: white; width: 100%; font-size: 10px; font-weight: 900; padding: 6px; border-radius: 4px; margin-top: 2px; text-transform: uppercase; border: none; cursor: pointer; }
         .label-heading { font-size: 10px; color: #94a3b8; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; display: block; letter-spacing: 0.025em; }
         input[type="date"], .input-text { background: rgba(0,0,0,0.1); border-radius: 4px; padding: 4px 6px; border: 1px solid var(--border-color); color: inherit; font-size: 0.9rem; font-weight: 600; width: 100%; outline: none; }
+        .week-display { background: #334155; padding: 4px 6px; border-radius: 4px; font-size: 0.9rem; font-weight: 800; color: #fff; text-align: center; border: 1px solid #475569; width: 100%; margin-top: 2px; display: block; }
         .defect-active { background: var(--fleet-amber); color: #000; border-color: var(--fleet-amber); animation: pulse-border 2s infinite; cursor: pointer; }
         @keyframes pulse-border { 0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); } 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
         .vor-stamp { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-15deg); border: 4px solid var(--fleet-red); color: var(--fleet-red); padding: 4px 18px; font-weight: 900; font-size: 1.5rem; opacity: 0; pointer-events: none; background: var(--card-bg); z-index: 10; }
@@ -38,6 +40,17 @@
         .sort-btn { background: #334155; color: #cbd5e1; border: 1px solid #475569; padding: 0.5rem; border-radius: 0.5rem; font-size: 11px; font-weight: 800; width: 100%; text-align: center; cursor: pointer; transition: 0.2s; }
         .sort-btn.active { background: #475569; color: white; border-color: #94a3b8; }
         .folder-card { cursor: pointer; border-left: 4px solid var(--fleet-red); }
+        .breadcrumb-item { cursor: pointer; color: #94a3b8; transition: color 0.2s; }
+        .breadcrumb-item:hover { color: #e11d48; }
+        
+        .defect-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        .defect-table th { text-align: left; padding: 12px; background: rgba(225, 29, 72, 0.1); color: var(--fleet-red); font-weight: 800; text-transform: uppercase; font-size: 11px; border-bottom: 2px solid var(--border-color); }
+        .defect-table td { padding: 12px; border-bottom: 1px solid var(--border-color); vertical-align: top; }
+        .defect-row:hover { background: rgba(255,255,255,0.02); }
+
+        .sub-nav { display: flex; gap: 10px; margin-bottom: 15px; }
+        .sub-nav-btn { padding: 6px 16px; border-radius: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; border: 1px solid var(--border-color); color: #94a3b8; transition: 0.2s; }
+        .sub-nav-btn.active { background: var(--fleet-red); color: white; border-color: var(--fleet-red); }
     </style>
 </head>
 <body class="dark">
@@ -45,16 +58,17 @@
     <aside>
         <div class="mb-6">
             <h1 class="text-2xl font-black uppercase mb-1">FTS<span class="text-rose-600">Maintenance</span></h1>
-            <div class="flex items-center gap-2">
-                <p class="text-[10px] text-slate-500 uppercase tracking-widest font-black">● Live Sync Active</p>
-                <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-bold border border-slate-700">v1.8.3</span>
+            <div class="flex items-center gap-2 flex-wrap">
+                <p class="text-[10px] text-slate-500 uppercase tracking-widest font-black">● Live Sync</p>
+                <span id="current-week-badge" class="text-[10px] px-2 py-0.5 rounded bg-rose-600/20 text-rose-500 font-black border border-rose-600/30">WEEK --</span>
             </div>
         </div>
         
         <nav class="mb-4">
             <button id="nav-vehicle" onclick="switchTab('vehicle')" class="nav-link active">VEHICLES</button>
             <button id="nav-trailer" onclick="switchTab('trailer')" class="nav-link">TRAILERS</button>
-            <button id="nav-jcc" onclick="switchTab('jcc')" class="nav-link">JCC CONNECT</button>
+            <button id="nav-jcc" onclick="switchTab('jcc')" class="nav-link">FROST CONNECT</button>
+            <button id="nav-defects" onclick="switchTab('defects')" class="nav-link">DEFECTS</button>
         </nav>
 
         <div id="sidebar-controls">
@@ -88,13 +102,17 @@
     <main>
         <div id="jcc-header" class="hidden mb-6 flex justify-between items-center">
             <div class="flex items-center gap-4">
-                <button id="jcc-back" onclick="loadJCCFiles()" class="hidden bg-slate-800 text-slate-300 px-4 py-2 rounded-lg font-bold text-xs uppercase hover:bg-slate-700">← All Directories</button>
-                <h2 id="jcc-current-path" class="text-xl font-black uppercase text-slate-400">JCC Docs</h2>
+                <button id="jcc-back" onclick="navigateUp()" class="hidden bg-slate-800 text-slate-300 px-4 py-2 rounded-lg font-bold text-xs uppercase hover:bg-slate-700">← Back</button>
+                <div id="breadcrumb-container" class="flex items-center gap-2 text-sm font-black uppercase text-slate-400">
+                    <span>Frost Docs</span>
+                </div>
             </div>
             <input type="text" id="jcc-search" oninput="filterJCC(this.value)" placeholder="Search files..." class="bg-slate-800 border border-slate-700 px-4 py-2 rounded-lg text-sm text-white outline-none focus:border-rose-600">
         </div>
         <div id="fleet-grid" class="grid-layout"></div>
     </main>
+
+    <input type="file" id="compliance-upload-hidden" class="hidden" accept=".pdf,.jpg,.jpeg,.png">
 
     <script>
         const SB_URL = 'https://mbudwnwxucluwgbkgbfx.supabase.co';
@@ -102,23 +120,42 @@
         const supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
 
         let currentTab = 'vehicle';
+        let defectView = 'active'; 
         let sortMode = 'alpha';
         let cachedChecks = [];
         let cachedVehicles = [];
         let cachedTrailers = [];
-        let cachedJCCFiles = [];
-
-        function toggleMode() { document.documentElement.classList.toggle('light'); document.documentElement.classList.toggle('dark'); }
+        let activeUploadData = null;
         
+        let currentPath = []; 
+
+        function toggleMode() { 
+            document.documentElement.classList.toggle('light'); 
+            document.documentElement.classList.toggle('dark'); 
+        }
+        
+        function getWeekNumber(dateInput) {
+            if (!dateInput) return null;
+            const d = new Date(dateInput);
+            if (isNaN(d)) return null;
+            d.setHours(0, 0, 0, 0);
+            d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+            const yearStart = new Date(d.getFullYear(), 0, 1);
+            return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        }
+
+        const currentWeek = getWeekNumber(new Date());
+
         function switchTab(tab) { 
             currentTab = tab; 
             localStorage.setItem('fts_current_tab', tab);
             
-            ['vehicle', 'trailer', 'jcc'].forEach(t => {
+            const tabs = ['vehicle', 'trailer', 'jcc', 'defects'];
+            tabs.forEach(t => {
                 const btn = document.getElementById(`nav-${t}`);
                 if(btn) btn.classList.toggle('active', tab === t);
             });
-            
+
             const addBtn = document.getElementById('add-unit-btn');
             const reportBtn = document.getElementById('btn-fleet-report');
             const controls = document.getElementById('sidebar-controls');
@@ -126,142 +163,263 @@
             const statLabel = document.getElementById('stat-label');
 
             if(tab === 'jcc') {
-                addBtn.style.display = 'none';
-                reportBtn.style.display = 'none';
+                addBtn.style.display = 'none'; 
+                reportBtn.style.display = 'none'; 
                 controls.style.display = 'none';
-                jccHeader.classList.remove('hidden');
-                statLabel.innerText = "FOLDERS";
+                jccHeader.classList.remove('hidden'); 
+                statLabel.innerText = "FOLDERS"; 
+                currentPath = [];
                 loadJCCFiles();
             } else {
-                addBtn.style.display = 'block';
-                reportBtn.style.display = 'block';
-                controls.style.display = 'block';
+                addBtn.style.display = (tab === 'defects') ? 'none' : 'block';
+                reportBtn.style.display = (tab === 'defects') ? 'none' : 'block';
+                controls.style.display = (tab === 'defects') ? 'none' : 'block'; 
                 jccHeader.classList.add('hidden');
-                statLabel.innerText = "TOTAL UNITS";
+                statLabel.innerText = (tab === 'defects') ? "DEFECTS FOUND" : "TOTAL UNITS";
                 loadFleet(); 
             }
         }
 
-        function setSort(mode) { sortMode = mode; document.getElementById('sort-alpha').classList.toggle('active', mode === 'alpha'); document.getElementById('sort-date').classList.toggle('active', mode === 'date'); renderFleet(); }
+        function setSort(mode) { 
+            sortMode = mode; 
+            document.getElementById('sort-alpha').classList.toggle('active', mode === 'alpha'); 
+            document.getElementById('sort-date').classList.toggle('active', mode === 'date'); 
+            renderFleet(); 
+        }
 
         async function loadFleet() {
             try {
-                const [vResponse, tResponse, cResponse] = await Promise.all([
+                const [vResponse, tResponse, cResponse, tcResponse] = await Promise.all([
                     supabaseClient.from('vehicles').select('*'),
                     supabaseClient.from('trailers').select('*'),
-                    supabaseClient.from('daily_vehicle_checks').select('*').order('created_at', { ascending: false })
+                    supabaseClient.from('daily_vehicle_checks').select('*').order('created_at', { ascending: false }),
+                    supabaseClient.from('daily_trailer_checks').select('*').order('created_at', { ascending: false })
                 ]);
                 cachedVehicles = vResponse.data || [];
                 cachedTrailers = tResponse.data || [];
-                cachedChecks = cResponse.data || [];
+                
+                const vChecks = (cResponse.data || []).map(item => ({ ...item, _origin: 'daily_vehicle_checks' }));
+                const tChecks = (tcResponse.data || []).map(item => ({ ...item, _origin: 'daily_trailer_checks' }));
+                cachedChecks = [...vChecks, ...tChecks].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                
                 renderFleet();
-            } catch (err) { console.error(err); }
+            } catch (err) { console.error("Load Error:", err); }
         }
 
-        async function loadJCCFiles() {
-            document.getElementById('jcc-back').classList.add('hidden');
-            document.getElementById('jcc-current-path').innerText = "Directories";
-            const grid = document.getElementById('fleet-grid');
-            grid.innerHTML = '<div class="col-span-full text-center p-10 font-bold animate-pulse text-slate-500 uppercase tracking-widest">Scanning Bucket...</div>';
+        function setDefectView(view) {
+            defectView = view;
+            renderFleet();
+        }
+
+        async function resolveDefect(id, currentNotes, originTable) {
+            const who = prompt("Enter your name:");
+            if (!who) return;
+            const action = prompt("What action was taken?");
+            if (!action) return;
             
-            try {
-                const { data, error } = await supabaseClient.storage.from('maintenance_docs').list('', { limit: 100 });
-                if (error) throw error;
-                const folders = (data || []).filter(f => !f.id && f.name !== '.emptyFolderPlaceholder');
-                renderJCCFolders(folders);
-            } catch (err) {
-                grid.innerHTML = `<div class="col-span-full text-center p-10 text-rose-500 font-bold uppercase">Storage Access Error: ${err.message}</div>`;
-            }
-        }
+            const timestamp = new Date().toLocaleString('en-GB');
+            const newNotes = `${currentNotes || ''}\n\n--- RESOLVED ---\nBy: ${who}\nDate: ${timestamp}\nAction: ${action}`;
+            
+            const { error } = await supabaseClient
+                .from(originTable)
+                .update({ 
+                    condition_status: 'Resolved - Nil Defect',
+                    defect_details: newNotes
+                })
+                .eq('id', id);
 
-        async function openJCCFolder(folderName) {
-            document.getElementById('jcc-back').classList.remove('hidden');
-            document.getElementById('jcc-current-path').innerText = folderName;
-            const grid = document.getElementById('fleet-grid');
-            grid.innerHTML = '<div class="col-span-full text-center p-10 font-bold animate-pulse text-slate-500 uppercase tracking-widest">Opening '+folderName+'...</div>';
-
-            try {
-                const { data, error } = await supabaseClient.storage.from('maintenance_docs').list(folderName, { limit: 100 });
-                if (error) throw error;
-                cachedJCCFiles = (data || []).filter(f => f.id !== null);
-                renderJCCFiles(cachedJCCFiles, folderName);
-            } catch (err) {
-                grid.innerHTML = `<div class="col-span-full text-center p-10 text-rose-500 font-bold uppercase">Folder Error: ${err.message}</div>`;
-            }
-        }
-
-        function renderJCCFolders(folders) {
-            const grid = document.getElementById('fleet-grid');
-            grid.innerHTML = '';
-            document.getElementById('stat-total').innerText = folders.length;
-            if (folders.length === 0) { grid.innerHTML = '<div class="col-span-full text-center p-10 text-slate-500 font-bold uppercase">No folders found.</div>'; return; }
-            folders.forEach(f => {
-                const card = document.createElement('div');
-                card.className = "glass-card folder-card rounded-xl p-6 flex flex-col items-center justify-center text-center gap-3";
-                card.onclick = () => openJCCFolder(f.name);
-                card.innerHTML = `<svg class="w-10 h-10 text-rose-600/50" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg><span class="font-black text-lg uppercase text-slate-200 tracking-tight">${f.name}</span><span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Open Folder</span>`;
-                grid.appendChild(card);
-            });
-        }
-
-        function renderJCCFiles(files, folder) {
-            const grid = document.getElementById('fleet-grid');
-            grid.innerHTML = '';
-            document.getElementById('stat-total').innerText = files.length;
-            if (files.length === 0) { grid.innerHTML = '<div class="col-span-full text-center p-10 text-slate-500 font-bold uppercase">No files found.</div>'; return; }
-            files.forEach(file => {
-                const { data: urlData } = supabaseClient.storage.from('maintenance_docs').getPublicUrl(`${folder}/${file.name}`);
-                const fileExt = file.name.split('.').pop().toUpperCase();
-                const card = document.createElement('div');
-                card.className = "glass-card rounded-xl flex flex-col justify-between border-l-4 border-l-rose-600";
-                card.innerHTML = `<div><div class="flex justify-between items-start mb-2"><span class="label-heading">Date: ${new Date(file.created_at).toLocaleDateString()}</span><span class="text-[9px] bg-slate-800 px-2 py-0.5 rounded text-rose-400 font-black border border-slate-700">${fileExt}</span></div><h3 class="font-black text-sm break-all uppercase text-slate-200 tracking-tight">${file.name}</h3></div><div class="mt-4 pt-3 border-t border-slate-700/50"><a href="${urlData.publicUrl}" target="_blank" class="block w-full bg-rose-600 text-white text-center py-2.5 rounded-lg text-[10px] font-black uppercase hover:bg-rose-500 transition-all">View Document</a></div>`;
-                grid.appendChild(card);
-            });
-        }
-
-        function filterJCC(query) {
-            const filtered = cachedJCCFiles.filter(f => f.name.toUpperCase().includes(query.toUpperCase()));
-            renderJCCFiles(filtered, document.getElementById('jcc-current-path').innerText);
+            if (error) alert("Error: " + error.message);
+            else loadFleet();
         }
 
         function renderFleet() {
-            if (currentTab === 'jcc') return;
-            const grid = document.getElementById('fleet-grid');
+            const grid = document.getElementById('fleet-grid'); 
             grid.innerHTML = '';
-            let data = currentTab === 'vehicle' ? [...cachedVehicles] : [...cachedTrailers];
+            
+            if (currentTab === 'jcc') return;
+
+            // --- DEFECTS TAB LOGIC ---
+            if (currentTab === 'defects') {
+                let defectReports = [];
+                
+                if (defectView === 'active') {
+                    defectReports = cachedChecks.filter(c => 
+                        c.condition_status && 
+                        c.condition_status.toLowerCase().includes('defect') && 
+                        !c.condition_status.toLowerCase().includes('nil') &&
+                        !c.condition_status.toLowerCase().includes('resolved')
+                    );
+                } else {
+                    defectReports = cachedChecks.filter(c => 
+                        c.condition_status && 
+                        c.condition_status.toLowerCase().includes('resolved')
+                    );
+                }
+
+                document.getElementById('stat-total').innerText = defectReports.length;
+
+                const sectionHeader = document.createElement('div');
+                sectionHeader.className = 'col-span-full mb-2';
+                sectionHeader.innerHTML = `
+                    <div class="sub-nav">
+                        <button onclick="setDefectView('active')" class="sub-nav-btn ${defectView === 'active' ? 'active' : ''}">Active Defects</button>
+                        <button onclick="setDefectView('history')" class="sub-nav-btn ${defectView === 'history' ? 'active' : ''}">History</button>
+                    </div>
+                `;
+                grid.appendChild(sectionHeader);
+
+                if (defectReports.length === 0) {
+                    const emptyMsg = document.createElement('div');
+                    emptyMsg.className = 'glass-card p-8 text-center text-slate-500 font-bold uppercase col-span-full';
+                    emptyMsg.innerText = defectView === 'active' ? 'No Active Defects Reported' : 'No Resolved History Found';
+                    grid.appendChild(emptyMsg);
+                    return;
+                }
+
+                const tableContainer = document.createElement('div');
+                tableContainer.className = 'glass-card col-span-full overflow-x-auto';
+                
+                let tableHTML = `
+                    <table class="defect-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Unit ID</th>
+                                <th>Driver Name</th>
+                                <th>Details</th>
+                                <th style="text-align:right">${defectView === 'active' ? 'Action' : 'Status'}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                defectReports.forEach(report => {
+                    const date = new Date(report.created_at).toLocaleDateString('en-GB');
+                    // Listing trailer_number or registration in the same column
+                    const unitID = report.registration || report.trailer_number || 'N/A'; 
+                    tableHTML += `
+                        <tr class="defect-row">
+                            <td class="font-black text-slate-400 whitespace-nowrap">${date}</td>
+                            <td><span class="plate-badge plate-critical">${unitID}</span></td>
+                            <td class="font-bold uppercase whitespace-nowrap">${report.driver_name || 'Unknown'}</td>
+                            <td class="text-slate-300 italic text-xs" style="max-width:300px; white-space: pre-wrap;">${report.defect_details || 'No details'}</td>
+                            <td style="text-align:right">
+                                ${defectView === 'active' ? 
+                                    `<button onclick="resolveDefect('${report.id}', \`${report.defect_details || ''}\`, '${report._origin}')" class="btn-action bg-green-600 text-white border-none">Mark Resolved</button>` : 
+                                    `<span class="text-[9px] font-black text-green-500 uppercase">Resolved</span>`
+                                }
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                tableHTML += `</tbody></table>`;
+                tableContainer.innerHTML = tableHTML;
+                grid.appendChild(tableContainer);
+                return;
+            }
+
+            // --- STANDARD VEHICLE/TRAILER TAB LOGIC ---
+            let data = [];
+            if(currentTab === 'vehicle') data = [...cachedVehicles];
+            else if(currentTab === 'trailer') data = [...cachedTrailers];
+
             document.getElementById('stat-total').innerText = data.length;
-            if (sortMode === 'alpha') data.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
-            else data.sort((a, b) => getMinDate(a) - getMinDate(b));
+
+            if (sortMode === 'alpha') {
+                data.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
+            } else {
+                data.sort((a, b) => getMinDate(a) - getMinDate(b));
+            }
 
             data.forEach(v => {
                 const vReg = v.registration_number.replace(/\s+/g, '').toUpperCase();
-                const latestCheck = cachedChecks.find(c => c.registration && c.registration.replace(/\s+/g, '').toUpperCase() === vReg);
-                let hasActiveDefect = latestCheck && latestCheck.condition_status.toLowerCase().includes('defect') && !latestCheck.condition_status.toLowerCase().includes('nil');
-                const table = currentTab === 'vehicle' ? 'vehicles' : 'trailers';
+                const latestCheck = cachedChecks.find(c => {
+                    const checkID = (c.registration || c.trailer_number || '').replace(/\s+/g, '').toUpperCase();
+                    return checkID === vReg;
+                });
+                let hasActiveDefect = latestCheck && latestCheck.condition_status.toLowerCase().includes('defect') && !latestCheck.condition_status.toLowerCase().includes('nil') && !latestCheck.condition_status.toLowerCase().includes('resolved');
+                let isTrailer = cachedTrailers.some(t => t.registration_number === v.registration_number);
+                let table = isTrailer ? 'trailers' : 'vehicles';
+                
+                const pmiWk = getWeekNumber(v.pmi_due);
+                const brakeWk = getWeekNumber(v.brake_test);
+                const isPmiDue = pmiWk !== null && pmiWk <= currentWeek;
+                const isBrakeDue = brakeWk !== null && brakeWk <= currentWeek;
+
                 const card = document.createElement('div');
                 card.className = `glass-card rounded-xl ${v.is_vor ? 'card-vor' : ''}`;
                 
-                let fieldsHtml = currentTab === 'vehicle' ? `
-                    <div class="grid grid-cols-2 gap-x-3 gap-y-3">
+                let vehicleSpecifics = !isTrailer ? `
+                    <div class="grid grid-cols-2 gap-3">
                         <div><span class="label-heading">MOT Due</span><input type="date" value="${v.mot_due || ''}" onchange="window.save('${v.registration_number}', 'mot_due', this.value, 'vehicles')"></div>
-                        <div><span class="label-heading">PMI Due</span><input type="date" value="${v.pmi_due || ''}" onchange="window.save('${v.registration_number}', 'pmi_due', this.value, 'vehicles')"></div>
+                        <div>
+                            <span class="label-heading">PMI Week</span>
+                            ${isPmiDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'pmi_due', 'vehicles')" class="btn-compliance">Upload PMI</button>` : `<div class="week-display">WEEK ${pmiWk || '--'}</div>`}
+                        </div>
                         <div><span class="label-heading">Road Tax</span><input type="date" value="${v.road_tax_due || ''}" onchange="window.save('${v.registration_number}', 'road_tax_due', this.value, 'vehicles')"></div>
-                        <div><span class="label-heading">Brake Test</span><input type="date" value="${v.brake_test || ''}" onchange="window.save('${v.registration_number}', 'brake_test', this.value, 'vehicles')"></div>
+                        <div>
+                            <span class="label-heading">Brake Test Week</span>
+                            ${isBrakeDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'brake_test', 'vehicles')" class="btn-compliance">Upload Brake</button>` : `<div class="week-display">WEEK ${brakeWk || '--'}</div>`}
+                        </div>
                     </div>
                     <div class="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-end">
                         <div class="flex-1"><span class="label-heading">Tachograph Calibration</span><input type="date" class="max-w-[170px]" value="${v.tachograph_service_due || ''}" onchange="window.save('${v.registration_number}', 'tachograph_service_due', this.value, 'vehicles')"></div>
                 ` : `
                     <div class="grid grid-cols-2 gap-3">
                         <div><span class="label-heading">MOT Due</span><input type="date" value="${v.mot_due || ''}" onchange="window.save('${v.registration_number}', 'mot_due', this.value, 'trailers')"></div>
-                        <div><span class="label-heading">PMI Due</span><input type="date" value="${v.pmi_due || ''}" onchange="window.save('${v.registration_number}', 'pmi_due', this.value, 'trailers')"></div>
+                        <div>
+                            <span class="label-heading">PMI Week</span>
+                            ${isPmiDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'pmi_due', 'trailers')" class="btn-compliance">Upload PMI</button>` : `<div class="week-display">WEEK ${pmiWk || '--'}</div>`}
+                        </div>
                     </div>
                     <div class="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-end"><div class="flex-grow"></div>
                 `;
 
-                card.innerHTML = `<div class="vor-stamp">OFF ROAD</div><div class="flex justify-between items-center mb-3 relative z-30"><div class="flex flex-wrap items-center gap-1.5"><div class="plate-badge ${getHealthStatus(v)}">${v.registration_number}</div>${currentTab === 'vehicle' ? `<button onclick="generatePDF('${v.registration_number}')" class="btn-action btn-pdf">PDF</button>` : ''}<button onclick="generateReport('${v.registration_number}', true)" class="btn-action btn-history">History</button><button onclick="generateReport('${v.registration_number}', false)" class="btn-action ${hasActiveDefect ? 'defect-active' : ''}">${hasActiveDefect ? 'Defect' : 'Clear'}</button></div><button onclick="toggleVOR_Action('${v.registration_number}', ${v.is_vor}, '${table}')" class="btn-action ${v.is_vor ? 'text-rose-500 font-black' : 'text-slate-500'}">${v.is_vor ? '● Active' : '○ VOR'}</button></div><div class="content-fade"><div class="mb-3"><span class="label-heading">VIN Number</span><input type="text" class="input-text" value="${v.vin_number || ''}" onchange="window.save('${v.registration_number}', 'vin_number', this.value, '${table}')"></div>${fieldsHtml}<button onclick="window.removeUnit('${v.registration_number}', '${table}')" class="text-slate-600 hover:text-rose-500 transition-colors mb-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button></div></div>`;
+                card.innerHTML = `
+                    <div class="vor-stamp">OFF ROAD</div>
+                    <div class="flex justify-between items-center mb-3 relative z-30">
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <div class="plate-badge ${getHealthStatus(v)}">${v.registration_number}</div>
+                            ${!isTrailer ? `<button onclick="generatePDF('${v.registration_number}')" class="btn-action btn-pdf">PDF</button>` : ''}
+                            <button onclick="generateReport('${v.registration_number}', true)" class="btn-action btn-history">History</button>
+                            <button onclick="generateReport('${v.registration_number}', false)" class="btn-action ${hasActiveDefect ? 'defect-active' : ''}">${hasActiveDefect ? 'Defect' : 'Clear'}</button>
+                        </div>
+                        <button onclick="toggleVOR_Action('${v.registration_number}', ${v.is_vor}, '${table}')" class="btn-action ${v.is_vor ? 'text-rose-500 font-black' : 'text-slate-500'}">${v.is_vor ? '● VOR' : '○ Active'}</button>
+                    </div>
+                    <div class="content-fade">
+                        <div class="mb-3"><span class="label-heading">VIN Number</span><input type="text" class="input-text" value="${v.vin_number || ''}" onchange="window.save('${v.registration_number}', 'vin_number', this.value, '${table}')"></div>
+                        ${vehicleSpecifics}
+                        <button onclick="window.removeUnit('${v.registration_number}', '${table}')" class="text-slate-600 hover:text-rose-500 transition-colors mb-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                    </div></div>`;
                 grid.appendChild(card);
             });
         }
+
+        window.triggerUpload = (reg, field, table) => {
+            activeUploadData = { reg, field, table };
+            document.getElementById('compliance-upload-hidden').click();
+        };
+
+        document.getElementById('compliance-upload-hidden').onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file || !activeUploadData) return;
+            const { reg, field, table } = activeUploadData;
+            const cleanReg = reg.replace(/\s+/g, '').toUpperCase();
+            const fileName = `${field}_WK${currentWeek}_${Date.now()}.${file.name.split('.').pop()}`;
+            const path = `${cleanReg}/${fileName}`;
+            try {
+                const { error: upErr } = await supabaseClient.storage.from('maintenance_docs').upload(path, file);
+                if (upErr) throw upErr;
+                const nextDate = new Date();
+                nextDate.setDate(nextDate.getDate() + 42); 
+                await supabaseClient.from(table).update({ [field]: nextDate.toISOString().split('T')[0] }).eq('registration_number', reg);
+                alert("File Uploaded. Next Check set for 6 weeks time.");
+                loadFleet();
+            } catch (err) { alert("Upload error: " + err.message); }
+        };
 
         function getMinDate(v) {
             const d = [v.mot_due, v.pmi_due, v.road_tax_due, v.tachograph_service_due, v.brake_test].filter(Boolean);
@@ -269,109 +427,185 @@
             return new Date(Math.min(...d.map(date => new Date(date))));
         }
 
-        window.generateFullFleetPDF = () => {
-            const { jsPDF } = window.jspdf; const doc = new jsPDF('l', 'mm', 'a4'); const today = new Date();
-            const isTrailer = currentTab === 'trailer'; const pool = isTrailer ? cachedTrailers : cachedVehicles;
-            doc.setFontSize(20); doc.text(`FTSMaintenance - ${isTrailer ? 'Trailer' : 'Vehicle'} Fleet Report`, 14, 15);
-            doc.setFontSize(10); doc.text(`Date Generated: ${today.toLocaleString()}`, 14, 22);
-            const rows = pool.map(v => {
-                const minD = getMinDate(v); const diff = minD.getFullYear() === 2099 ? 'N/A' : Math.ceil((minD - today) / (1000 * 60 * 60 * 24));
-                return [v.registration_number, v.mot_due || '-', v.pmi_due || '-', isTrailer ? '-' : (v.road_tax_due || '-'), isTrailer ? '-' : (v.brake_test || '-'), v.is_vor ? 'OFF ROAD' : 'ACTIVE', diff === 'N/A' ? '-' : `${diff} Days`];
-            });
-            doc.autoTable({ startY: 30, head: [['Reg', 'MOT Due', 'PMI Due', 'Road Tax', 'Brake Test', 'Status', 'Days Remaining']], body: rows, theme: 'grid', headStyles: { fillColor: [225, 29, 72] }, styles: { fontSize: 8 } });
-            doc.save(`FTS_${isTrailer ? 'Trailer' : 'Vehicle'}_Report.pdf`);
+        window.save = async (reg, field, val, table) => { 
+            await supabaseClient.from(table).update({ [field]: val }).eq('registration_number', reg); 
+            loadFleet(); 
         };
 
-        // --- RESTORED v1.8.1 PERFECT PDF LOGIC ---
+        window.toggleVOR_Action = async (reg, state, table) => { 
+            await supabaseClient.from(table).update({ is_vor: !state }).eq('registration_number', reg); 
+            loadFleet(); 
+        };
+
+        window.addNewUnit = async () => { 
+            const t = currentTab === 'trailer' ? 'trailers' : 'vehicles'; 
+            const r = prompt("Enter New Registration:").toUpperCase().trim(); 
+            if(r) { 
+                await supabaseClient.from(t).upsert({ registration_number: r }); 
+                loadFleet(); 
+            } 
+        };
+
+        window.removeUnit = async (reg, table) => { 
+            if(confirm(`Remove ${reg} permanently?`)) { 
+                await supabaseClient.from(table).delete().eq('registration_number', reg); 
+                loadFleet(); 
+            } 
+        };
+        
         window.generatePDF = (reg) => {
             const { jsPDF } = window.jspdf; 
             const doc = new jsPDF();
             const vData = cachedVehicles.find(v => v.registration_number === reg);
-            const checks = cachedChecks.filter(c => c.registration && c.registration.replace(/\s+/g, '').toUpperCase() === reg.replace(/\s+/g, '').toUpperCase());
-            
-            // Header Section
+            const checks = cachedChecks.filter(c => (c.registration || c.trailer_number || '').replace(/\s+/g, '').toUpperCase() === reg.replace(/\s+/g, '').toUpperCase());
             doc.setFontSize(22); 
-            doc.text("FTSMaintenance - Vehicle Compliance & Audit", 14, 20);
-            doc.setFontSize(12); 
-            doc.setTextColor(100); 
-            doc.text(`Registration: ${reg}`, 14, 30); 
-            doc.text(`VIN: ${vData.vin_number || 'NOT RECORDED'}`, 14, 36); 
-            doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 42);
-            
-            // Main Table
+            doc.text("FTSMaintenance Audit Report", 14, 20);
             doc.autoTable({ 
-                startY: 50, 
-                head: [['Maintenance Field', 'Expiry / Due Date']], 
-                body: [
-                    ['MOT Due Date', vData.mot_due || 'Not Set'],
-                    ['PMI Due Date', vData.pmi_due || 'Not Set'],
-                    ['Road Tax Expiry', vData.road_tax_due || 'Not Set'],
-                    ['Brake Test Due', vData.brake_test || 'Not Set'],
-                    ['Tachograph Calibration', vData.tachograph_service_due || 'Not Set'],
-                    ['Status', vData.is_vor ? 'OFF ROAD (VOR)' : 'ACTIVE']
-                ], 
-                theme: 'striped', 
-                headStyles: { fillColor: [225, 29, 72] } 
+                startY: 30, 
+                head: [['Maintenance Field', 'Current Due / Week']], 
+                body: [['MOT', vData.mot_due || 'N/A'], ['PMI', vData.pmi_due ? `Week ${getWeekNumber(vData.pmi_due)}` : 'N/A'], ['Road Tax', vData.road_tax_due || 'N/A'], ['Brake Test', vData.brake_test ? `Week ${getWeekNumber(vData.brake_test)}` : 'N/A'], ['Status', vData.is_vor ? 'VOR' : 'Active']],
+                headStyles: { fillColor: [225, 29, 72] }
             });
-            
-            // Audit Table
             doc.autoTable({ 
-                startY: doc.lastAutoTable.finalY + 15, 
-                head: [['Date/Time', 'Driver/Reporter', 'Status', 'Defect Details / Notes']], 
-                body: checks.map(r => [
-                    new Date(r.created_at).toLocaleString(), 
-                    r.driver_name || 'System', 
-                    r.condition_status.toUpperCase(), 
-                    r.defect_details || 'N/A'
-                ]), 
-                styles: { fontSize: 8 }, 
-                headStyles: { fillColor: [51, 65, 85] } 
+                startY: doc.lastAutoTable.finalY + 10, 
+                head: [['Date', 'Condition', 'Notes']], 
+                body: checks.map(r => [new Date(r.created_at).toLocaleDateString(), r.condition_status, r.defect_details || 'N/A']) 
             });
-            
-            doc.save(`${reg}_FTS_Audit.pdf`);
+            doc.save(`${reg}_FTS_Report.pdf`);
+        };
+
+        window.generateFullFleetPDF = () => {
+            const { jsPDF } = window.jspdf; 
+            const doc = new jsPDF('l');
+            const data = currentTab === 'trailer' ? cachedTrailers : cachedVehicles;
+            doc.text(`${currentTab.toUpperCase()} FLEET COMPLIANCE SUMMARY`, 14, 15);
+            doc.autoTable({ 
+                startY: 25, 
+                head: [['Registration', 'MOT Due', 'PMI Week', 'Status']], 
+                body: data.map(v => [v.registration_number, v.mot_due || 'N/A', v.pmi_due ? `Week ${getWeekNumber(v.pmi_due)}` : 'N/A', v.is_vor ? 'VOR' : 'Active']),
+                headStyles: { fillColor: [225, 29, 72] }
+            });
+            doc.save(`FTS_Fleet_Report.pdf`);
         };
 
         window.generateReport = (reg, full) => {
-            const reports = cachedChecks.filter(c => c.registration && c.registration.replace(/\s+/g, '').toUpperCase() === reg.replace(/\s+/g, '').toUpperCase());
-            const reportPanel = document.getElementById('report-panel');
-            const isDefective = reports[0] && reports[0].condition_status.toLowerCase().includes('defect') && !reports[0].condition_status.toLowerCase().includes('nil');
-            let html = `<div class="font-bold text-rose-500 mb-2 border-b border-slate-700 pb-1">${reg} Status</div>`;
-            if (!full && isDefective) html += `<button onclick="resolveDefect('${reg}')" class="w-full mb-3 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded font-black text-xs uppercase transition-all">Mark Resolved</button>`;
-            reports.slice(0, full ? 15 : 3).forEach(r => {
-                const isNil = r.condition_status.toLowerCase().includes('nil');
-                html += `<div class="report-item"><div class="flex justify-between font-bold mb-1"><span class="text-[11px] text-slate-400">${new Date(r.created_at).toLocaleDateString()}</span><span class="${isNil ? 'text-emerald-400' : 'text-rose-400'} text-[10px]">${r.condition_status}</span></div><div class="text-slate-300 text-[11px] italic leading-tight mt-1">${r.defect_details || 'Nil Defect'}</div></div>`;
-            });
-            reportPanel.innerHTML = html;
+            const reports = cachedChecks.filter(c => (c.registration || c.trailer_number || '').toUpperCase().replace(/\s+/g, '') === reg.toUpperCase().replace(/\s+/g, ''));
+            const panel = document.getElementById('report-panel');
+            panel.innerHTML = `<div class="font-bold text-rose-500 mb-2">${reg} Audit History</div>` + 
+                reports.slice(0, full ? 20 : 3).map(r => `
+                <div class="report-item">
+                    <div class="flex justify-between font-bold text-[11px]">
+                        <span>${new Date(r.created_at).toLocaleDateString()}</span>
+                        <span class="text-rose-400">${r.condition_status}</span>
+                    </div>
+                    <p class="text-slate-400 text-[10px] italic leading-tight mt-1">${r.defect_details || 'No notes'}</p>
+                </div>`).join('');
         };
 
-        window.resolveDefect = async (reg) => {
-            if (!confirm(`Mark defects for ${reg} as resolved?`)) return;
-            await supabaseClient.from('daily_vehicle_checks').insert([{ registration: reg, condition_status: 'Nil Defect', defect_details: 'Resolved via Portal', driver_name: 'Fleet Manager', created_at: new Date().toISOString() }]);
-            loadFleet();
-        };
+        // --- FROST CONNECT LOGIC ---
 
-        window.save = async (reg, field, val, table) => { await supabaseClient.from(table).update({ [field]: val }).eq('registration_number', reg); loadFleet(); };
-        window.toggleVOR_Action = async (reg, state, table) => { await supabaseClient.from(table).update({ is_vor: !state }).eq('registration_number', reg); loadFleet(); };
-        window.addNewUnit = async () => { const table = currentTab === 'vehicle' ? 'vehicles' : 'trailers'; const reg = prompt(`Add New Reg:`).toUpperCase().trim(); if(reg) { await supabaseClient.from(table).upsert({ registration_number: reg }); loadFleet(); } };
-        window.removeUnit = async (reg, table) => { if(confirm(`Delete ${reg}?`)) { await supabaseClient.from(table).delete().eq('registration_number', reg); loadFleet(); } };
+        async function loadJCCFiles() {
+            const grid = document.getElementById('fleet-grid'); 
+            const backBtn = document.getElementById('jcc-back');
+            grid.innerHTML = '<p class="text-slate-500 italic">Accessing Frost Docs...</p>';
+            
+            updateBreadcrumbs();
+            backBtn.classList.toggle('hidden', currentPath.length === 0);
 
-        function getHealthStatus(v) { 
-            const today = new Date(); let s = 'plate-ok';
-            const dates = [v.mot_due, v.pmi_due, v.road_tax_due, v.tachograph_service_due, v.brake_test];
-            dates.forEach(d => { if(!d) return; const diff = (new Date(d) - today) / (1000 * 60 * 60 * 24); if (diff <= 5) s = 'plate-critical'; else if (diff <= 10 && s !== 'plate-critical') s = 'plate-warn'; });
-            return s;
+            const folderPath = currentPath.join('/');
+            const { data, error } = await supabaseClient.storage.from('maintenance_docs').list(folderPath, { limit: 100 });
+            
+            if (error) {
+                grid.innerHTML = `<p class="text-rose-500">Error loading files: ${error.message}</p>`;
+                return;
+            }
+
+            if (!data || data.length === 0) {
+                grid.innerHTML = '<p class="text-slate-500 italic">This directory is empty.</p>';
+                return;
+            }
+
+            grid.innerHTML = data.filter(item => item.name !== '.emptyFolderPlaceholder').map(item => {
+                const isFolder = !item.id;
+                let dateDisplay = '';
+                if (item.created_at) {
+                    const dateObj = new Date(item.created_at);
+                    const ukDate = dateObj.toLocaleDateString('en-GB');
+                    const ukTime = dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                    dateDisplay = `<p class="text-xs font-black text-slate-500 mt-0.5 uppercase">Added: ${ukDate} - ${ukTime}</p>`;
+                }
+
+                if (isFolder) {
+                    return `
+                        <div class="glass-card folder-card p-6 flex flex-col items-center gap-3" onclick="navigateDown('${item.name}')">
+                            <span class="font-black text-lg uppercase">${item.name}</span>
+                            <span class="text-[9px] font-bold text-slate-500 uppercase text-center">Open Folder</span>
+                        </div>`;
+                } else {
+                    const fullFilePath = folderPath ? `${folderPath}/${item.name}` : item.name;
+                    const { data: url } = supabaseClient.storage.from('maintenance_docs').getPublicUrl(fullFilePath);
+                    return `
+                        <div class="glass-card p-4 flex flex-col justify-between border-l-4 border-l-rose-600">
+                            <div>
+                                <h3 class="font-black text-xs uppercase break-all">${item.name}</h3>
+                                ${dateDisplay}
+                            </div>
+                            <a href="${url.publicUrl}" target="_blank" class="w-full mt-4 bg-rose-600 text-white text-center py-2 rounded text-[9px] font-black uppercase">Open File</a>
+                        </div>`;
+                }
+            }).join('');
         }
 
-        supabaseClient.channel('f_sync')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => loadFleet())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'trailers' }, () => loadFleet())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_vehicle_checks' }, () => loadFleet())
-            .subscribe();
-            
-        window.onload = () => {
+        function navigateDown(folderName) {
+            currentPath.push(folderName);
+            loadJCCFiles();
+        }
+
+        function navigateUp() {
+            if (currentPath.length > 0) {
+                currentPath.pop();
+                loadJCCFiles();
+            }
+        }
+
+        function navigateToPathIndex(index) {
+            currentPath = currentPath.slice(0, index + 1);
+            loadJCCFiles();
+        }
+
+        function resetToRoot() {
+            currentPath = [];
+            loadJCCFiles();
+        }
+
+        function updateBreadcrumbs() {
+            const container = document.getElementById('breadcrumb-container');
+            let html = `<span class="breadcrumb-item" onclick="resetToRoot()">Frost Docs</span>`;
+            currentPath.forEach((folder, index) => {
+                html += ` <span class="text-slate-600">/</span> <span class="breadcrumb-item" onclick="navigateToPathIndex(${index})">${folder}</span>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function filterJCC(query) {
+            const cards = document.querySelectorAll('#fleet-grid .glass-card');
+            cards.forEach(c => { c.style.display = c.innerText.toLowerCase().includes(query.toLowerCase()) ? 'flex' : 'none'; });
+        }
+
+        function getHealthStatus(v) {
+            const pmiWk = getWeekNumber(v.pmi_due);
+            if (pmiWk && pmiWk <= currentWeek) return 'plate-critical';
+            if (!v.mot_due) return 'plate-ok';
+            const motDiff = (new Date(v.mot_due) - new Date()) / 86400000;
+            if (motDiff < 7) return 'plate-critical';
+            if (motDiff < 14) return 'plate-warn';
+            return 'plate-ok';
+        }
+
+        window.onload = () => { 
+            document.getElementById('current-week-badge').innerText = `WEEK ${currentWeek}`;
             const lastTab = localStorage.getItem('fts_current_tab');
-            if (lastTab) switchTab(lastTab);
-            else loadFleet();
+            switchTab(lastTab || 'vehicle'); 
         };
     </script>
 </body>
