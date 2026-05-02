@@ -13,6 +13,11 @@
         :root { --fleet-red: #e11d48; --fleet-amber: #f59e0b; --fleet-green: #10b981; --bg-main: #0f172a; --sidebar-bg: #1e293b; --card-bg: #1e293b; --text-main: #f1f5f9; --border-color: #334155; }
         .light { --bg-main: #f8fafc; --sidebar-bg: #ffffff; --card-bg: #ffffff; --text-main: #0f172a; --border-color: #e2e8f0; }
         body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-main); transition: all 0.3s ease; display: flex; height: 100vh; overflow: hidden; font-size: 16px; }
+        
+        /* Login Screen Styles */
+        #login-overlay { position: fixed; inset: 0; z-index: 9999; background: #0f172a; display: flex; align-items: center; justify-content: center; transition: opacity 0.5s ease; }
+        .login-box { width: 100%; max-width: 400px; padding: 2.5rem; background: #1e293b; border-radius: 1.5rem; border: 1px solid #334155; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+        
         aside { width: 340px; background: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.25rem; height: 100vh; flex-shrink: 0; }
         main { flex-grow: 1; height: 100vh; overflow-y: auto; padding: 1.5rem; }
         .nav-link { width: 100%; text-align: left; padding: 0.85rem 1.25rem; border-radius: 0.75rem; font-size: 1rem; font-weight: 700; margin-bottom: 0.4rem; color: #94a3b8; transition: all 0.2s; display: flex; align-items: center; gap: 0.75rem; }
@@ -27,7 +32,8 @@
         .btn-pdf { background: #0ea5e9; color: white; border-color: #0ea5e9; }
         .btn-compliance { background: var(--fleet-red); color: white; width: 100%; font-size: 10px; font-weight: 900; padding: 6px; border-radius: 4px; margin-top: 2px; text-transform: uppercase; border: none; cursor: pointer; }
         .label-heading { font-size: 10px; color: #94a3b8; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; display: block; letter-spacing: 0.025em; }
-        input[type="date"], .input-text { background: rgba(0,0,0,0.1); border-radius: 4px; padding: 4px 6px; border: 1px solid var(--border-color); color: inherit; font-size: 0.9rem; font-weight: 600; width: 100%; outline: none; }
+        input[type="date"], .input-text, .login-input { background: rgba(0,0,0,0.1); border-radius: 4px; padding: 4px 6px; border: 1px solid var(--border-color); color: inherit; font-size: 0.9rem; font-weight: 600; width: 100%; outline: none; }
+        .login-input { padding: 0.75rem 1rem; margin-bottom: 1rem; background: #0f172a; border-radius: 0.75rem; }
         .week-display { background: #334155; padding: 4px 6px; border-radius: 4px; font-size: 0.9rem; font-weight: 800; color: #fff; text-align: center; border: 1px solid #475569; width: 100%; margin-top: 2px; display: block; }
         .defect-active { background: var(--fleet-amber); color: #000; border-color: var(--fleet-amber); animation: pulse-border 2s infinite; cursor: pointer; }
         @keyframes pulse-border { 0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); } 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
@@ -55,7 +61,24 @@
 </head>
 <body class="dark">
 
-    <aside>
+    <!-- LOGIN OVERLAY -->
+    <div id="login-overlay">
+        <div class="login-box">
+            <h2 class="text-3xl font-black uppercase mb-2 text-center">FTS<span class="text-rose-600">Login</span></h2>
+            <p class="text-slate-500 text-xs text-center font-bold uppercase mb-8 tracking-widest">Management Portal Access</p>
+            
+            <label class="label-heading">Email Address</label>
+            <input type="email" id="login-email" class="login-input" placeholder="name@fts.com">
+            
+            <label class="label-heading">Password</label>
+            <input type="password" id="login-password" class="login-input" placeholder="••••••••">
+            
+            <button id="login-btn" onclick="handleLogin()" class="w-full bg-rose-600 text-white py-4 rounded-xl font-black uppercase hover:bg-rose-500 transition-all shadow-lg shadow-rose-600/20 mt-4">Sign In</button>
+            <p id="login-error" class="text-rose-500 text-[10px] font-bold text-center mt-4 hidden uppercase"></p>
+        </div>
+    </div>
+
+    <aside id="main-sidebar" class="hidden">
         <div class="mb-6">
             <h1 class="text-2xl font-black uppercase mb-1">FTS<span class="text-rose-600">Maintenance</span></h1>
             <div class="flex items-center gap-2 flex-wrap">
@@ -95,11 +118,12 @@
                 <span id="stat-total" class="text-xl font-black">--</span>
             </div>
             <button id="btn-fleet-report" onclick="generateFullFleetPDF()" class="w-full bg-slate-700 text-white py-3 rounded-xl text-[11px] font-black hover:bg-slate-600 transition-all uppercase mb-2">Generate Fleet Report</button>
-            <button id="add-unit-btn" onclick="window.addNewUnit()" class="w-full bg-rose-600 text-white py-3.5 rounded-xl text-sm font-bold hover:bg-rose-500 transition-all uppercase">+ Add Unit</button>
+            <button id="add-unit-btn" onclick="window.addNewUnit()" class="w-full bg-rose-600 text-white py-3.5 rounded-xl text-sm font-bold hover:bg-rose-500 transition-all uppercase mb-2">+ Add Unit</button>
+            <button onclick="handleLogout()" class="w-full text-slate-500 py-2 text-[10px] font-black uppercase hover:text-rose-500 transition-colors">Sign Out</button>
         </div>
     </aside>
 
-    <main>
+    <main id="main-content" class="hidden">
         <div id="jcc-header" class="hidden mb-6 flex justify-between items-center">
             <div class="flex items-center gap-4">
                 <button id="jcc-back" onclick="navigateUp()" class="hidden bg-slate-800 text-slate-300 px-4 py-2 rounded-lg font-bold text-xs uppercase hover:bg-slate-700">← Back</button>
@@ -126,8 +150,45 @@
         let cachedVehicles = [];
         let cachedTrailers = [];
         let activeUploadData = null;
-        
         let currentPath = []; 
+
+        // --- AUTH LOGIC ---
+        async function handleLogin() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const errorEl = document.getElementById('login-error');
+            const loginBtn = document.getElementById('login-btn');
+
+            loginBtn.innerText = "AUTHENTICATING...";
+            errorEl.classList.add('hidden');
+
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+            if (error) {
+                errorEl.innerText = error.message;
+                errorEl.classList.remove('hidden');
+                loginBtn.innerText = "SIGN IN";
+            } else {
+                showApp();
+            }
+        }
+
+        async function checkSession() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) showApp();
+        }
+
+        function showApp() {
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('main-sidebar').classList.remove('hidden');
+            document.getElementById('main-content').classList.remove('hidden');
+            loadFleet();
+        }
+
+        async function handleLogout() {
+            await supabaseClient.auth.signOut();
+            window.location.reload();
+        }
 
         function toggleMode() { 
             document.documentElement.classList.toggle('light'); 
@@ -163,17 +224,17 @@
             const statLabel = document.getElementById('stat-label');
 
             if(tab === 'jcc') {
-                addBtn.style.display = 'none'; 
-                reportBtn.style.display = 'none'; 
-                controls.style.display = 'none';
+                if(addBtn) addBtn.style.display = 'none'; 
+                if(reportBtn) reportBtn.style.display = 'none'; 
+                if(controls) controls.style.display = 'none';
                 jccHeader.classList.remove('hidden'); 
                 statLabel.innerText = "FOLDERS"; 
                 currentPath = [];
                 loadJCCFiles();
             } else {
-                addBtn.style.display = (tab === 'defects') ? 'none' : 'block';
-                reportBtn.style.display = (tab === 'defects') ? 'none' : 'block';
-                controls.style.display = (tab === 'defects') ? 'none' : 'block'; 
+                if(addBtn) addBtn.style.display = (tab === 'defects') ? 'none' : 'block';
+                if(reportBtn) reportBtn.style.display = (tab === 'defects') ? 'none' : 'block';
+                if(controls) controls.style.display = (tab === 'defects') ? 'none' : 'block'; 
                 jccHeader.classList.add('hidden');
                 statLabel.innerText = (tab === 'defects') ? "DEFECTS FOUND" : "TOTAL UNITS";
                 loadFleet(); 
@@ -295,7 +356,6 @@
 
                 defectReports.forEach(report => {
                     const date = new Date(report.created_at).toLocaleDateString('en-GB');
-                    // Listing trailer_number or registration in the same column
                     const unitID = report.registration || report.trailer_number || 'N/A'; 
                     tableHTML += `
                         <tr class="defect-row">
@@ -502,8 +562,6 @@
                 </div>`).join('');
         };
 
-        // --- FROST CONNECT LOGIC ---
-
         async function loadJCCFiles() {
             const grid = document.getElementById('fleet-grid'); 
             const backBtn = document.getElementById('jcc-back');
@@ -604,8 +662,11 @@
 
         window.onload = () => { 
             document.getElementById('current-week-badge').innerText = `WEEK ${currentWeek}`;
+            checkSession(); // Initial session check
+            
+            // Handle Tab Switching from storage
             const lastTab = localStorage.getItem('fts_current_tab');
-            switchTab(lastTab || 'vehicle'); 
+            if (lastTab) switchTab(lastTab); 
         };
     </script>
 </body>
