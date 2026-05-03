@@ -463,21 +463,24 @@
             document.getElementById('compliance-upload-hidden').click();
         };
 
+        // --- CONSOLIDATED UPLOAD INTERCEPTOR ---
         document.getElementById('compliance-upload-hidden').onchange = async (e) => {
             const file = e.target.files[0];
             if (!file || !activeUploadData) return;
             const { reg, field, table } = activeUploadData;
             const cleanReg = reg.replace(/\s+/g, '').toUpperCase();
             const fileName = `${field}_WK${currentWeek}_${Date.now()}.${file.name.split('.').pop()}`;
-            const path = `${cleanReg}/${fileName}`;
+            
+            // Re-routed to the EXACT same AUTHORISE folder the sister app uses
+            const authorizeFileName = `${cleanReg}---${table}---${field}---${fileName}`;
+            const path = `AUTHORISE/${authorizeFileName}`;
+            
             try {
                 const { error: upErr } = await supabaseClient.storage.from('maintenance_docs').upload(path, file);
                 if (upErr) throw upErr;
-                const nextDate = new Date();
-                nextDate.setDate(nextDate.getDate() + 42); 
-                await supabaseClient.from(table).update({ [field]: nextDate.toISOString().split('T')[0] }).eq('registration_number', reg);
-                alert("File Uploaded. Next Check set for 6 weeks time.");
-                loadFleet();
+                
+                alert("File uploaded to Authorisation Queue.");
+                loadFleet(); 
             } catch (err) { alert("Upload error: " + err.message); }
         };
 
@@ -562,6 +565,129 @@
                 </div>`).join('');
         };
 
+        // --- SMART PARSER ---
+        function parseAuthFileName(fileName) {
+            if (fileName.includes('---')) {
+                const parts = fileName.split('---');
+                if (parts.length >= 4) {
+                    return { 
+                        reg: parts[0].replace(/\s+/g, '').toUpperCase(), 
+                        table: parts[1].toLowerCase().trim(), 
+                        field: parts[2], 
+                        actualName: parts.slice(3).join('---'), 
+                        isCompliance: true 
+                    };
+                }
+            }
+            
+            if (fileName.includes('_')) {
+                const parts = fileName.split('_');
+                if (parts.length >= 3) {
+                    return { 
+                        reg: parts[1].replace(/\s+/g, '').toUpperCase(), 
+                        table: parts[0].toLowerCase().trim(), 
+                        field: parts[2].trim(), 
+                        actualName: fileName, 
+                        isCompliance: false 
+                    };
+                }
+            }
+            return null; 
+        }
+
+        // --- AUTHORISATION ACTIONS ---
+        window.authoriseFile = async (filePath) => {
+            const cleanFilePath = filePath.replace(/\/+/g, '/').replace(/^\//, '');
+            const fileName = cleanFilePath.split('/').pop();
+            const fileData = parseAuthFileName(fileName);
+            
+            if(!fileData) return alert("Invalid file format. Cannot determine which vehicle this belongs to.");
+
+            const { reg, table, field, actualName, isCompliance } = fileData;
+            
+            // MODIFICATION: Build structured folder path -> Category / Reg / DocumentType / Filename
+            // Capitalize table name (e.g., 'vehicles' becomes 'Vehicles')
+            const categoryFolder = table.charAt(0).toUpperCase() + table.slice(1);
+            
+            // Build and clean the new nested path
+            const cleanNewPath = `${categoryFolder}/${reg}/${field}/${actualName}`.replace(/\/+/g, '/').replace(/^\//, '');
+
+            try {
+                // 1. Move the file into the new structured folder
+                const { error: moveErr } = await supabaseClient.storage.from('maintenance_docs').move(cleanFilePath, cleanNewPath);
+                
+                if (moveErr) throw new Error(`Move failed (${cleanFilePath} -> ${cleanNewPath}): ${moveErr.message}`);
+
+                if (isCompliance) {
+                    const nextDate = new Date();
+                    nextDate.setDate(nextDate.getDate() + 42); 
+                    const { error: dbErr } = await supabaseClient.from(table).update({ [field]: nextDate.toISOString().split('T')[0] }).eq('registration_number', reg);
+                    if (dbErr) console.warn("Compliance Sync Issue:", dbErr.message);
+                    alert(`Authorised! File moved to ${categoryFolder}/${reg}/${field} and compliance dates updated.`);
+                } else {
+                    // 2. Keep sister app database in sync with the new nested folder path
+                    const { error: dbErr } = await supabaseClient.from('maintenance_records')
+                        .update({ file_path: cleanNewPath })
+                        .eq('file_path', cleanFilePath);
+                    
+                    if (dbErr) console.warn("Sister App Sync Issue:", dbErr.message);
+                    alert(`Authorised! File moved to ${categoryFolder}/${reg}/${field}. Linked database records updated.`);
+                }
+
+                loadJCCFiles(); 
+            } catch(err) {
+                alert("Authorisation Error:\n" + err.message + "\n\n(If you see 'Object not found', please check your Supabase Storage Policies to ensure you have UPDATE permissions on this bucket!)");
+            }
+        };
+
+        window.rejectFile = async (filePath) => {
+            const note = prompt("Please enter a reason for rejecting this document:");
+            if (note === null) return;
+
+            const cleanFilePath = filePath.replace(/\/+/g, '/').replace(/^\//, '');
+            const fileName = cleanFilePath.split('/').pop();
+            const cleanNewPath = `REJECTED/${fileName}`.replace(/\/+/g, '/').replace(/^\//, '');
+
+            try {
+                const { error: moveErr } = await supabaseClient.storage.from('maintenance_docs').move(cleanFilePath, cleanNewPath);
+                if (moveErr) throw new Error(moveErr.message);
+
+                if (note.trim() !== "") {
+                    const noteBlob = new Blob([note], { type: 'text/plain' });
+                    await supabaseClient.storage.from('maintenance_docs').upload(`${cleanNewPath}.note.txt`, noteBlob);
+                }
+
+                // Update sister app database to mark as rejected
+                await supabaseClient.from('maintenance_records')
+                    .update({ file_path: cleanNewPath, document_type: 'REJECTED' })
+                    .eq('file_path', cleanFilePath);
+
+                alert("File moved to Rejected folder.");
+                loadJCCFiles();
+            } catch(err) {
+                alert("Rejection Error: " + err.message);
+            }
+        };
+
+        window.addFileNote = async (filePath) => {
+            const note = prompt("Enter a note for this file before processing:");
+            if (!note || note.trim() === "") return;
+
+            const cleanFilePath = filePath.replace(/\/+/g, '/').replace(/^\//, '');
+
+            try {
+                const noteBlob = new Blob([note], { type: 'text/plain' });
+                const { error } = await supabaseClient.storage.from('maintenance_docs').upload(`${cleanFilePath}.note.txt`, noteBlob);
+                
+                if(error) throw error;
+                alert("Note attached to file.");
+                loadJCCFiles();
+            } catch(err) {
+                alert("Note Error: " + err.message);
+            }
+        };
+
+        // --- FROST DOCS RENDERER ---
         async function loadJCCFiles() {
             const grid = document.getElementById('fleet-grid'); 
             const backBtn = document.getElementById('jcc-back');
@@ -602,13 +728,31 @@
                 } else {
                     const fullFilePath = folderPath ? `${folderPath}/${item.name}` : item.name;
                     const { data: url } = supabaseClient.storage.from('maintenance_docs').getPublicUrl(fullFilePath);
+                    
+                    const parsedData = parseAuthFileName(item.name);
+                    let displayName = parsedData ? parsedData.actualName : item.name;
+
+                    let actionButtons = `<a href="${url.publicUrl}" target="_blank" class="w-full mt-4 bg-rose-600 text-white text-center py-2 rounded text-[9px] font-black uppercase">Open File</a>`;
+
+                    // Using toUpperCase guarantees it catches AUTHORISE from either portal
+                    if (folderPath.toUpperCase().includes('AUTHORIS') || parsedData) {
+                        actionButtons = `
+                            <div class="flex gap-1 mt-4">
+                                <a href="${url.publicUrl}" target="_blank" class="flex-1 bg-slate-600 hover:bg-slate-500 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors flex items-center justify-center">View</a>
+                                <button onclick="authoriseFile('${fullFilePath}')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors">Auth</button>
+                                <button onclick="rejectFile('${fullFilePath}')" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors">Reject</button>
+                                <button onclick="addFileNote('${fullFilePath}')" class="flex-1 bg-amber-500 hover:bg-amber-400 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors">Note</button>
+                            </div>
+                        `;
+                    }
+
                     return `
                         <div class="glass-card p-4 flex flex-col justify-between border-l-4 border-l-rose-600">
                             <div>
-                                <h3 class="font-black text-xs uppercase break-all">${item.name}</h3>
+                                <h3 class="font-black text-xs uppercase break-all">${displayName}</h3>
                                 ${dateDisplay}
                             </div>
-                            <a href="${url.publicUrl}" target="_blank" class="w-full mt-4 bg-rose-600 text-white text-center py-2 rounded text-[9px] font-black uppercase">Open File</a>
+                            ${actionButtons}
                         </div>`;
                 }
             }).join('');
@@ -662,9 +806,8 @@
 
         window.onload = () => { 
             document.getElementById('current-week-badge').innerText = `WEEK ${currentWeek}`;
-            checkSession(); // Initial session check
+            checkSession(); 
             
-            // Handle Tab Switching from storage
             const lastTab = localStorage.getItem('fts_current_tab');
             if (lastTab) switchTab(lastTab); 
         };
