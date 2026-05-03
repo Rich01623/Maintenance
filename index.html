@@ -205,6 +205,18 @@
             return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
         }
 
+        // --- NEW: Helper to get the actual date from an ISO week number ---
+        function getDateFromISOWeek(week, year) {
+            const simple = new Date(year, 0, 1 + (week - 1) * 7);
+            const dow = simple.getDay();
+            const ISOweekStart = simple;
+            if (dow <= 4)
+                ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+            else
+                ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+            return ISOweekStart;
+        }
+
         const currentWeek = getWeekNumber(new Date());
 
         function switchTab(tab) { 
@@ -436,8 +448,18 @@
                     <div class="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-end"><div class="flex-grow"></div>
                 `;
 
+                let vorStampHTML = '<div class="vor-stamp">OFF ROAD</div>';
+                if (v.is_vor) {
+                    vorStampHTML = `
+                        <div class="vor-stamp" style="width: 85%; max-width: 250px; text-align: center;">
+                            <div>OFF ROAD</div>
+                            ${v.vor_reason ? `<div class="text-[11px] font-bold tracking-normal leading-tight mt-2 pt-1 border-t-[3px] border-rose-600 break-words whitespace-normal">${v.vor_reason}</div>` : ''}
+                        </div>
+                    `;
+                }
+
                 card.innerHTML = `
-                    <div class="vor-stamp">OFF ROAD</div>
+                    ${vorStampHTML}
                     <div class="flex justify-between items-center mb-3 relative z-30">
                         <div class="flex flex-wrap items-center gap-1.5">
                             <div class="plate-badge ${getHealthStatus(v)}">${v.registration_number}</div>
@@ -471,13 +493,18 @@
             const cleanReg = reg.replace(/\s+/g, '').toUpperCase();
             const fileName = `${field}_WK${currentWeek}_${Date.now()}.${file.name.split('.').pop()}`;
             
-            // Re-routed to the EXACT same AUTHORISE folder the sister app uses
             const authorizeFileName = `${cleanReg}---${table}---${field}---${fileName}`;
             const path = `AUTHORISE/${authorizeFileName}`;
             
             try {
                 const { error: upErr } = await supabaseClient.storage.from('maintenance_docs').upload(path, file);
                 if (upErr) throw upErr;
+
+                await supabaseClient.from('maintenance_records').insert([{ 
+                    vehicle_reg: cleanReg, 
+                    document_type: field, 
+                    file_path: path 
+                }]);
                 
                 alert("File uploaded to Authorisation Queue.");
                 loadFleet(); 
@@ -496,7 +523,17 @@
         };
 
         window.toggleVOR_Action = async (reg, state, table) => { 
-            await supabaseClient.from(table).update({ is_vor: !state }).eq('registration_number', reg); 
+            let reason = null;
+            if (!state) { 
+                reason = prompt(`Please enter the reason for placing ${reg} VOR:`);
+                if (reason === null) return; 
+            }
+
+            await supabaseClient.from(table).update({ 
+                is_vor: !state,
+                vor_reason: reason 
+            }).eq('registration_number', reg); 
+            
             loadFleet(); 
         };
 
@@ -573,7 +610,8 @@
                     return { 
                         reg: parts[0].replace(/\s+/g, '').toUpperCase(), 
                         table: parts[1].toLowerCase().trim(), 
-                        field: parts[2], 
+                        folderName: parts[2],
+                        dbColumn: parts[2],
                         actualName: parts.slice(3).join('---'), 
                         isCompliance: true 
                     };
@@ -583,12 +621,25 @@
             if (fileName.includes('_')) {
                 const parts = fileName.split('_');
                 if (parts.length >= 3) {
+                    const rawFolder = parts[2].trim();
+                    let dbColumn = rawFolder;
+                    let isCompliance = false;
+
+                    if (rawFolder.toLowerCase() === 'safetyinspection' || rawFolder.toLowerCase() === 'pmidue' || rawFolder.toLowerCase() === 'pmi') {
+                        dbColumn = 'pmi_due';
+                        isCompliance = true;
+                    } else if (rawFolder.toLowerCase() === 'braketest') {
+                        dbColumn = 'brake_test';
+                        isCompliance = true;
+                    }
+
                     return { 
                         reg: parts[1].replace(/\s+/g, '').toUpperCase(), 
                         table: parts[0].toLowerCase().trim(), 
-                        field: parts[2].trim(), 
+                        folderName: rawFolder, 
+                        dbColumn: dbColumn, 
                         actualName: fileName, 
-                        isCompliance: false 
+                        isCompliance: isCompliance 
                     };
                 }
             }
@@ -603,40 +654,63 @@
             
             if(!fileData) return alert("Invalid file format. Cannot determine which vehicle this belongs to.");
 
-            const { reg, table, field, actualName, isCompliance } = fileData;
+            const { reg, table, folderName, dbColumn, actualName, isCompliance } = fileData;
             
-            // MODIFICATION: Build structured folder path -> Category / Reg / DocumentType / Filename
-            // Capitalize table name (e.g., 'vehicles' becomes 'Vehicles')
+            let actualDbReg = reg;
+            const allUnits = [...cachedVehicles, ...cachedTrailers];
+            const matchedUnit = allUnits.find(u => (u.registration_number || '').replace(/\s+/g, '').toUpperCase() === reg);
+            if (matchedUnit) {
+                actualDbReg = matchedUnit.registration_number;
+            }
+
             const categoryFolder = table.charAt(0).toUpperCase() + table.slice(1);
-            
-            // Build and clean the new nested path
-            const cleanNewPath = `${categoryFolder}/${reg}/${field}/${actualName}`.replace(/\/+/g, '/').replace(/^\//, '');
+            const cleanNewPath = `${categoryFolder}/${reg}/${folderName}/${actualName}`.replace(/\/+/g, '/').replace(/^\//, '');
 
             try {
-                // 1. Move the file into the new structured folder
+                // 1. Move the file
                 const { error: moveErr } = await supabaseClient.storage.from('maintenance_docs').move(cleanFilePath, cleanNewPath);
-                
-                if (moveErr) throw new Error(`Move failed (${cleanFilePath} -> ${cleanNewPath}): ${moveErr.message}`);
+                if (moveErr) throw new Error(`Move failed: ${moveErr.message}`);
 
+                // 2. Calculate Compliance Dates
                 if (isCompliance) {
-                    const nextDate = new Date();
-                    nextDate.setDate(nextDate.getDate() + 42); 
-                    const { error: dbErr } = await supabaseClient.from(table).update({ [field]: nextDate.toISOString().split('T')[0] }).eq('registration_number', reg);
-                    if (dbErr) console.warn("Compliance Sync Issue:", dbErr.message);
-                    alert(`Authorised! File moved to ${categoryFolder}/${reg}/${field} and compliance dates updated.`);
-                } else {
-                    // 2. Keep sister app database in sync with the new nested folder path
-                    const { error: dbErr } = await supabaseClient.from('maintenance_records')
-                        .update({ file_path: cleanNewPath })
-                        .eq('file_path', cleanFilePath);
+                    // Ask the manager for the week the test was actually performed
+                    let testWeekStr = prompt(`What ISO week number was this ${folderName} carried out? (e.g., 18)\n\nNote: Entering the exact week ensures accurate compliance tracking.`);
                     
-                    if (dbErr) console.warn("Sister App Sync Issue:", dbErr.message);
-                    alert(`Authorised! File moved to ${categoryFolder}/${reg}/${field}. Linked database records updated.`);
+                    // If they click cancel or enter nothing, abort the whole process so dates don't get messy
+                    if (!testWeekStr || isNaN(parseInt(testWeekStr))) {
+                        // Undo the file move since they cancelled the authorisation
+                        await supabaseClient.storage.from('maintenance_docs').move(cleanNewPath, cleanFilePath);
+                        return alert("Authorisation cancelled. A valid week number is required for compliance tracking.");
+                    }
+
+                    let testWeek = parseInt(testWeekStr);
+                    let currentYr = new Date().getFullYear();
+                    
+                    // Get the actual date of the Monday of that specific ISO week
+                    let baseDate = getDateFromISOWeek(testWeek, currentYr);
+                    
+                    // Add 6 weeks (42 days) to the date the test was actually done
+                    baseDate.setDate(baseDate.getDate() + 42); 
+                    
+                    const { error: dbErr } = await supabaseClient.from(table)
+                        .update({ [dbColumn]: baseDate.toISOString().split('T')[0] })
+                        .eq('registration_number', actualDbReg);
+                    
+                    if (dbErr) console.warn("Compliance Sync Issue:", dbErr.message);
+                    alert(`Authorised! File moved to ${categoryFolder}/${reg}/${folderName}. Compliance next due: Week ${getWeekNumber(baseDate)}.`);
+                } else {
+                    alert(`Authorised! File moved to ${categoryFolder}/${reg}/${folderName}. Linked database records updated.`);
                 }
 
+                // Keep DB in sync
+                await supabaseClient.from('maintenance_records')
+                    .update({ file_path: cleanNewPath })
+                    .eq('file_path', cleanFilePath);
+
                 loadJCCFiles(); 
+                loadFleet(); 
             } catch(err) {
-                alert("Authorisation Error:\n" + err.message + "\n\n(If you see 'Object not found', please check your Supabase Storage Policies to ensure you have UPDATE permissions on this bucket!)");
+                alert("Authorisation Error:\n" + err.message);
             }
         };
 
@@ -652,15 +726,10 @@
                 const { error: moveErr } = await supabaseClient.storage.from('maintenance_docs').move(cleanFilePath, cleanNewPath);
                 if (moveErr) throw new Error(moveErr.message);
 
-                if (note.trim() !== "") {
-                    const noteBlob = new Blob([note], { type: 'text/plain' });
-                    await supabaseClient.storage.from('maintenance_docs').upload(`${cleanNewPath}.note.txt`, noteBlob);
-                }
+                const updates = { file_path: cleanNewPath, document_type: 'REJECTED' };
+                if (note.trim() !== "") updates.notes = note;
 
-                // Update sister app database to mark as rejected
-                await supabaseClient.from('maintenance_records')
-                    .update({ file_path: cleanNewPath, document_type: 'REJECTED' })
-                    .eq('file_path', cleanFilePath);
+                await supabaseClient.from('maintenance_records').update(updates).eq('file_path', cleanFilePath);
 
                 alert("File moved to Rejected folder.");
                 loadJCCFiles();
@@ -670,20 +739,82 @@
         };
 
         window.addFileNote = async (filePath) => {
-            const note = prompt("Enter a note for this file before processing:");
+            const note = prompt("Enter a note for this document (this will be attached digitally):");
             if (!note || note.trim() === "") return;
+
+            const cleanFilePath = filePath.replace(/\/+/g, '/').replace(/^\//, '');
+            const fileName = cleanFilePath.split('/').pop();
+
+            try {
+                const { data: existing, error: fetchErr } = await supabaseClient
+                    .from('maintenance_records')
+                    .select('id')
+                    .eq('file_path', cleanFilePath)
+                    .maybeSingle();
+                
+                if (fetchErr) throw fetchErr;
+
+                if (existing) {
+                    const { error: updateErr } = await supabaseClient
+                        .from('maintenance_records')
+                        .update({ notes: note })
+                        .eq('file_path', cleanFilePath);
+                    
+                    if (updateErr) throw updateErr;
+                } else {
+                    const fileData = parseAuthFileName(fileName);
+                    let regToInsert = "UNKNOWN";
+                    let docTypeToInsert = "MANUAL_UPLOAD";
+
+                    if (fileData) {
+                        regToInsert = fileData.reg;
+                        docTypeToInsert = fileData.folderName || fileData.dbColumn || "MANUAL_UPLOAD";
+                    } else {
+                        const pathParts = cleanFilePath.split('/');
+                        if (pathParts.length >= 3) {
+                            regToInsert = pathParts[1].toUpperCase();
+                            docTypeToInsert = pathParts[2];
+                        }
+                    }
+
+                    const { error: insertErr } = await supabaseClient
+                        .from('maintenance_records')
+                        .insert([{ 
+                            file_path: cleanFilePath, 
+                            notes: note,
+                            vehicle_reg: regToInsert,
+                            document_type: docTypeToInsert
+                        }]);
+                    
+                    if (insertErr) throw insertErr;
+                }
+                
+                alert("Note saved successfully.");
+                loadJCCFiles();
+            } catch(err) {
+                alert("Note Error: " + err.message);
+            }
+        };
+
+        window.deleteFile = async (filePath) => {
+            if (!confirm("WARNING: Are you sure you want to permanently delete this document? This cannot be undone.")) return;
 
             const cleanFilePath = filePath.replace(/\/+/g, '/').replace(/^\//, '');
 
             try {
-                const noteBlob = new Blob([note], { type: 'text/plain' });
-                const { error } = await supabaseClient.storage.from('maintenance_docs').upload(`${cleanFilePath}.note.txt`, noteBlob);
+                const { error: storageErr } = await supabaseClient.storage.from('maintenance_docs').remove([cleanFilePath]);
+                if (storageErr) throw new Error(`Storage Deletion Failed: ${storageErr.message}`);
+
+                const { error: dbErr } = await supabaseClient.from('maintenance_records')
+                    .delete()
+                    .eq('file_path', cleanFilePath);
                 
-                if(error) throw error;
-                alert("Note attached to file.");
+                if (dbErr) console.warn("Database Deletion Warning:", dbErr.message);
+
+                alert("File permanently deleted.");
                 loadJCCFiles();
             } catch(err) {
-                alert("Note Error: " + err.message);
+                alert("Delete Error:\n" + err.message);
             }
         };
 
@@ -709,6 +840,18 @@
                 return;
             }
 
+            let fileNotesMap = {};
+            const filesOnly = data.filter(item => item.id).map(item => folderPath ? `${folderPath}/${item.name}` : item.name);
+            
+            if (filesOnly.length > 0) {
+                const { data: dbRecords } = await supabaseClient.from('maintenance_records').select('file_path, notes').in('file_path', filesOnly);
+                if (dbRecords) {
+                    dbRecords.forEach(rec => {
+                        if (rec.notes) fileNotesMap[rec.file_path] = rec.notes;
+                    });
+                }
+            }
+
             grid.innerHTML = data.filter(item => item.name !== '.emptyFolderPlaceholder').map(item => {
                 const isFolder = !item.id;
                 let dateDisplay = '';
@@ -732,16 +875,25 @@
                     const parsedData = parseAuthFileName(item.name);
                     let displayName = parsedData ? parsedData.actualName : item.name;
 
-                    let actionButtons = `<a href="${url.publicUrl}" target="_blank" class="w-full mt-4 bg-rose-600 text-white text-center py-2 rounded text-[9px] font-black uppercase">Open File</a>`;
+                    const existingNote = fileNotesMap[fullFilePath];
+                    const noteHtml = existingNote ? `<div class="mt-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded text-amber-500 text-[10px] font-bold italic leading-tight"><b>Note:</b> ${existingNote}</div>` : '';
 
-                    // Using toUpperCase guarantees it catches AUTHORISE from either portal
-                    if (folderPath.toUpperCase().includes('AUTHORIS') || parsedData) {
+                    let actionButtons = `
+                        <div class="flex gap-1 mt-4">
+                            <a href="${url.publicUrl}" target="_blank" class="flex-[2] bg-rose-600 hover:bg-rose-500 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors flex items-center justify-center">View</a>
+                            <button onclick="addFileNote('${fullFilePath}')" class="flex-[1.5] bg-amber-500 hover:bg-amber-400 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors">${existingNote ? 'Edit Note' : 'Add Note'}</button>
+                            <button onclick="deleteFile('${fullFilePath}')" class="flex-1 bg-slate-800 hover:bg-red-700 text-slate-300 hover:text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors">Del</button>
+                        </div>
+                    `;
+
+                    if (folderPath.toUpperCase().includes('AUTHORIS')) {
                         actionButtons = `
                             <div class="flex gap-1 mt-4">
                                 <a href="${url.publicUrl}" target="_blank" class="flex-1 bg-slate-600 hover:bg-slate-500 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors flex items-center justify-center">View</a>
                                 <button onclick="authoriseFile('${fullFilePath}')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors">Auth</button>
                                 <button onclick="rejectFile('${fullFilePath}')" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors">Reject</button>
                                 <button onclick="addFileNote('${fullFilePath}')" class="flex-1 bg-amber-500 hover:bg-amber-400 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors">Note</button>
+                                <button onclick="deleteFile('${fullFilePath}')" class="flex-1 bg-slate-800 hover:bg-red-700 text-slate-300 hover:text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors">Del</button>
                             </div>
                         `;
                     }
@@ -751,6 +903,7 @@
                             <div>
                                 <h3 class="font-black text-xs uppercase break-all">${displayName}</h3>
                                 ${dateDisplay}
+                                ${noteHtml}
                             </div>
                             ${actionButtons}
                         </div>`;
