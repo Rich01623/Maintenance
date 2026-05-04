@@ -57,6 +57,10 @@
         .sub-nav { display: flex; gap: 10px; margin-bottom: 15px; }
         .sub-nav-btn { padding: 6px 16px; border-radius: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; border: 1px solid var(--border-color); color: #94a3b8; transition: 0.2s; }
         .sub-nav-btn.active { background: var(--fleet-red); color: white; border-color: var(--fleet-red); }
+
+        /* Modal Animation */
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
     </style>
 </head>
 <body class="dark">
@@ -78,6 +82,29 @@
         </div>
     </div>
 
+    <!-- ISO WEEK CALCULATOR MODAL -->
+    <div id="iso-week-modal" class="fixed inset-0 z-[10000] hidden flex items-center justify-center transition-opacity" style="background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px);">
+        <div class="glass-card w-full max-w-sm p-6 relative animate-fade-in" style="background: var(--card-bg); border-radius: 1.5rem; border: 1px solid var(--border-color);">
+            <button onclick="closeIsoWeekModal()" class="absolute top-4 right-4 text-slate-400 hover:text-rose-500 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <div class="flex items-center gap-3 mb-6">
+                <div class="p-2 rounded-lg bg-amber-500/10 text-amber-500">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                </div>
+                <h3 class="text-xl font-black uppercase tracking-tight text-white">ISO Week Calc</h3>
+            </div>
+            
+            <label class="label-heading mb-2">Select a Date</label>
+            <input type="date" id="iso-calc-input" class="input-text mb-6 w-full text-lg p-3" onchange="calculateIsoWeek()">
+            
+            <div class="text-center p-6 rounded-xl border border-dashed border-slate-600 bg-slate-800/50">
+                <span class="block text-[10px] font-bold uppercase tracking-[0.2em] mb-2 text-slate-400">Calculated Week</span>
+                <span id="iso-calc-result" class="text-4xl font-black text-rose-500">--</span>
+            </div>
+        </div>
+    </div>
+
     <aside id="main-sidebar" class="hidden">
         <div class="mb-6">
             <h1 class="text-2xl font-black uppercase mb-1">FTS<span class="text-rose-600">Maintenance</span></h1>
@@ -92,6 +119,13 @@
             <button id="nav-trailer" onclick="switchTab('trailer')" class="nav-link">TRAILERS</button>
             <button id="nav-jcc" onclick="switchTab('jcc')" class="nav-link">FROST CONNECT</button>
             <button id="nav-defects" onclick="switchTab('defects')" class="nav-link">DEFECTS</button>
+
+            <div class="mt-4 pt-4 border-t border-slate-700">
+                <button onclick="openIsoWeekModal()" class="nav-link !text-slate-300 hover:!text-white hover:bg-slate-800">
+                    <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    WHAT ISO WEEK?
+                </button>
+            </div>
         </nav>
 
         <div id="sidebar-controls">
@@ -194,6 +228,27 @@
             document.documentElement.classList.toggle('light'); 
             document.documentElement.classList.toggle('dark'); 
         }
+
+        // --- ISO WEEK CALCULATOR UI FUNCTIONS ---
+        function openIsoWeekModal() {
+            document.getElementById('iso-week-modal').classList.remove('hidden');
+            document.getElementById('iso-calc-input').valueAsDate = new Date();
+            calculateIsoWeek();
+        }
+
+        function closeIsoWeekModal() {
+            document.getElementById('iso-week-modal').classList.add('hidden');
+        }
+
+        function calculateIsoWeek() {
+            const dateVal = document.getElementById('iso-calc-input').value;
+            if (!dateVal) {
+                document.getElementById('iso-calc-result').innerText = "--";
+                return;
+            }
+            const week = getWeekNumber(new Date(dateVal));
+            document.getElementById('iso-calc-result').innerText = `Week ${week}`;
+        }
         
         function getWeekNumber(dateInput) {
             if (!dateInput) return null;
@@ -205,7 +260,6 @@
             return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
         }
 
-        // --- NEW: Helper to get the actual date from an ISO week number ---
         function getDateFromISOWeek(week, year) {
             const simple = new Date(year, 0, 1 + (week - 1) * 7);
             const dow = simple.getDay();
@@ -419,12 +473,24 @@
                 const isPmiDue = pmiWk !== null && pmiWk <= currentWeek;
                 const isBrakeDue = brakeWk !== null && brakeWk <= currentWeek;
 
+                // --- LOCKED COMPLIANCE FIELDS ---
+                const motDateObj = v.mot_due ? new Date(v.mot_due) : null;
+                const isMotDue = !motDateObj || (motDateObj - new Date()) / 86400000 < 28;
+                const motDisplay = motDateObj ? motDateObj.toLocaleDateString('en-GB') : '--';
+
+                const tachoDateObj = v.tachograph_service_due ? new Date(v.tachograph_service_due) : null;
+                const isTachoDue = !tachoDateObj || (tachoDateObj - new Date()) / 86400000 < 28;
+                const tachoDisplay = tachoDateObj ? tachoDateObj.toLocaleDateString('en-GB') : '--';
+
                 const card = document.createElement('div');
                 card.className = `glass-card rounded-xl ${v.is_vor ? 'card-vor' : ''}`;
                 
                 let vehicleSpecifics = !isTrailer ? `
                     <div class="grid grid-cols-2 gap-3">
-                        <div><span class="label-heading">MOT Due</span><input type="date" value="${v.mot_due || ''}" onchange="window.save('${v.registration_number}', 'mot_due', this.value, 'vehicles')"></div>
+                        <div>
+                            <span class="label-heading">MOT Due</span>
+                            ${isMotDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'mot_due', 'vehicles')" class="btn-compliance">Upload MOT</button>` : `<div class="week-display">${motDisplay}</div>`}
+                        </div>
                         <div>
                             <span class="label-heading">PMI Week</span>
                             ${isPmiDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'pmi_due', 'vehicles')" class="btn-compliance">Upload PMI</button>` : `<div class="week-display">WEEK ${pmiWk || '--'}</div>`}
@@ -436,10 +502,16 @@
                         </div>
                     </div>
                     <div class="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-end">
-                        <div class="flex-1"><span class="label-heading">Tachograph Calibration</span><input type="date" class="max-w-[170px]" value="${v.tachograph_service_due || ''}" onchange="window.save('${v.registration_number}', 'tachograph_service_due', this.value, 'vehicles')"></div>
+                        <div class="flex-1">
+                            <span class="label-heading">Tachograph Calibration</span>
+                            ${isTachoDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'tachograph_service_due', 'vehicles')" class="btn-compliance max-w-[170px]">Upload Tacho</button>` : `<div class="week-display max-w-[170px]">${tachoDisplay}</div>`}
+                        </div>
                 ` : `
                     <div class="grid grid-cols-2 gap-3">
-                        <div><span class="label-heading">MOT Due</span><input type="date" value="${v.mot_due || ''}" onchange="window.save('${v.registration_number}', 'mot_due', this.value, 'trailers')"></div>
+                        <div>
+                            <span class="label-heading">MOT Due</span>
+                            ${isMotDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'mot_due', 'trailers')" class="btn-compliance">Upload MOT</button>` : `<div class="week-display">${motDisplay}</div>`}
+                        </div>
                         <div>
                             <span class="label-heading">PMI Week</span>
                             ${isPmiDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'pmi_due', 'trailers')" class="btn-compliance">Upload PMI</button>` : `<div class="week-display">WEEK ${pmiWk || '--'}</div>`}
@@ -607,13 +679,17 @@
             if (fileName.includes('---')) {
                 const parts = fileName.split('---');
                 if (parts.length >= 4) {
+                    let compType = 'week';
+                    if (parts[2] === 'mot_due' || parts[2] === 'tachograph_service_due') compType = 'date';
+                    
                     return { 
                         reg: parts[0].replace(/\s+/g, '').toUpperCase(), 
                         table: parts[1].toLowerCase().trim(), 
                         folderName: parts[2],
                         dbColumn: parts[2],
                         actualName: parts.slice(3).join('---'), 
-                        isCompliance: true 
+                        isCompliance: (parts[2] === 'pmi_due' || parts[2] === 'brake_test' || parts[2] === 'mot_due' || parts[2] === 'tachograph_service_due'), 
+                        complianceType: compType
                     };
                 }
             }
@@ -624,6 +700,7 @@
                     const rawFolder = parts[2].trim();
                     let dbColumn = rawFolder;
                     let isCompliance = false;
+                    let compType = 'week';
 
                     if (rawFolder.toLowerCase() === 'safetyinspection' || rawFolder.toLowerCase() === 'pmidue' || rawFolder.toLowerCase() === 'pmi') {
                         dbColumn = 'pmi_due';
@@ -631,6 +708,15 @@
                     } else if (rawFolder.toLowerCase() === 'braketest') {
                         dbColumn = 'brake_test';
                         isCompliance = true;
+                    } else if (rawFolder.toLowerCase() === 'motcertificate' || rawFolder.toLowerCase() === 'motdue' || rawFolder.toLowerCase() === 'mot') {
+                        dbColumn = 'mot_due';
+                        isCompliance = true;
+                        compType = 'date';
+                    } else if (rawFolder.toLowerCase() === 'tachographcalibration' || rawFolder.toLowerCase() === 'tachocalibration' || rawFolder.toLowerCase() === 'tachograph_service_due') {
+                        // FIXED: Added tachographcalibration to explicitly catch the sister app dropdown text!
+                        dbColumn = 'tachograph_service_due';
+                        isCompliance = true;
+                        compType = 'date';
                     }
 
                     return { 
@@ -639,7 +725,8 @@
                         folderName: rawFolder, 
                         dbColumn: dbColumn, 
                         actualName: fileName, 
-                        isCompliance: isCompliance 
+                        isCompliance: isCompliance,
+                        complianceType: compType 
                     };
                 }
             }
@@ -654,7 +741,7 @@
             
             if(!fileData) return alert("Invalid file format. Cannot determine which vehicle this belongs to.");
 
-            const { reg, table, folderName, dbColumn, actualName, isCompliance } = fileData;
+            const { reg, table, folderName, dbColumn, actualName, isCompliance, complianceType } = fileData;
             
             let actualDbReg = reg;
             const allUnits = [...cachedVehicles, ...cachedTrailers];
@@ -667,42 +754,66 @@
             const cleanNewPath = `${categoryFolder}/${reg}/${folderName}/${actualName}`.replace(/\/+/g, '/').replace(/^\//, '');
 
             try {
-                // 1. Move the file
                 const { error: moveErr } = await supabaseClient.storage.from('maintenance_docs').move(cleanFilePath, cleanNewPath);
                 if (moveErr) throw new Error(`Move failed: ${moveErr.message}`);
 
-                // 2. Calculate Compliance Dates
                 if (isCompliance) {
-                    // Ask the manager for the week the test was actually performed
-                    let testWeekStr = prompt(`What ISO week number was this ${folderName} carried out? (e.g., 18)\n\nNote: Entering the exact week ensures accurate compliance tracking.`);
-                    
-                    // If they click cancel or enter nothing, abort the whole process so dates don't get messy
-                    if (!testWeekStr || isNaN(parseInt(testWeekStr))) {
-                        // Undo the file move since they cancelled the authorisation
-                        await supabaseClient.storage.from('maintenance_docs').move(cleanNewPath, cleanFilePath);
-                        return alert("Authorisation cancelled. A valid week number is required for compliance tracking.");
-                    }
+                    let updateDateStr = '';
 
-                    let testWeek = parseInt(testWeekStr);
-                    let currentYr = new Date().getFullYear();
-                    
-                    // Get the actual date of the Monday of that specific ISO week
-                    let baseDate = getDateFromISOWeek(testWeek, currentYr);
-                    
-                    // Add 6 weeks (42 days) to the date the test was actually done
-                    baseDate.setDate(baseDate.getDate() + 42); 
+                    if (complianceType === 'date') {
+                        let nextDatePrompt = prompt(`What is the NEXT due date for this ${folderName}?\n(Format: DD/MM/YYYY or YYYY-MM-DD)`);
+                        
+                        if (!nextDatePrompt) {
+                            await supabaseClient.storage.from('maintenance_docs').move(cleanNewPath, cleanFilePath);
+                            return alert("Authorisation cancelled. A valid future date is required for compliance tracking.");
+                        }
+
+                        let parsedDate;
+                        const partsUK = nextDatePrompt.split(/[\/\-]/);
+                        if (partsUK.length === 3 && partsUK[0].length <= 2) { 
+                            parsedDate = new Date(`${partsUK[2]}-${partsUK[1]}-${partsUK[0]}T12:00:00Z`);
+                        } else {
+                            parsedDate = new Date(nextDatePrompt);
+                        }
+
+                        if (isNaN(parsedDate.getTime())) {
+                            await supabaseClient.storage.from('maintenance_docs').move(cleanNewPath, cleanFilePath);
+                            return alert("Authorisation cancelled. The date format was not recognised.");
+                        }
+                        
+                        updateDateStr = parsedDate.toISOString().split('T')[0];
+
+                    } else {
+                        let testWeekStr = prompt(`What ISO week number was this ${folderName} carried out? (e.g., 18)\n\nNote: Entering the exact week ensures accurate compliance tracking.`);
+                        
+                        if (!testWeekStr || isNaN(parseInt(testWeekStr))) {
+                            await supabaseClient.storage.from('maintenance_docs').move(cleanNewPath, cleanFilePath);
+                            return alert("Authorisation cancelled. A valid week number is required for compliance tracking.");
+                        }
+
+                        let testWeek = parseInt(testWeekStr);
+                        let currentYr = new Date().getFullYear();
+                        
+                        let baseDate = getDateFromISOWeek(testWeek, currentYr);
+                        baseDate.setDate(baseDate.getDate() + 42); 
+                        updateDateStr = baseDate.toISOString().split('T')[0];
+                    }
                     
                     const { error: dbErr } = await supabaseClient.from(table)
-                        .update({ [dbColumn]: baseDate.toISOString().split('T')[0] })
+                        .update({ [dbColumn]: updateDateStr })
                         .eq('registration_number', actualDbReg);
                     
                     if (dbErr) console.warn("Compliance Sync Issue:", dbErr.message);
-                    alert(`Authorised! File moved to ${categoryFolder}/${reg}/${folderName}. Compliance next due: Week ${getWeekNumber(baseDate)}.`);
+                    
+                    if (complianceType === 'date') {
+                        alert(`Authorised! File moved to ${categoryFolder}/${reg}/${folderName}. Next due: ${new Date(updateDateStr).toLocaleDateString('en-GB')}.`);
+                    } else {
+                        alert(`Authorised! File moved to ${categoryFolder}/${reg}/${folderName} and 6-week compliance date updated.`);
+                    }
                 } else {
                     alert(`Authorised! File moved to ${categoryFolder}/${reg}/${folderName}. Linked database records updated.`);
                 }
 
-                // Keep DB in sync
                 await supabaseClient.from('maintenance_records')
                     .update({ file_path: cleanNewPath })
                     .eq('file_path', cleanFilePath);
@@ -792,7 +903,7 @@
                 alert("Note saved successfully.");
                 loadJCCFiles();
             } catch(err) {
-                alert("Note Error: " + err.message);
+                alert("Note Error: " + err.message + "\n\n(Ensure you ran the SQL script to allow updates to maintenance_records!)");
             }
         };
 
@@ -814,7 +925,7 @@
                 alert("File permanently deleted.");
                 loadJCCFiles();
             } catch(err) {
-                alert("Delete Error:\n" + err.message);
+                alert("Delete Error:\n" + err.message + "\n\n(Check your Supabase SQL policies for DELETE permissions!)");
             }
         };
 
