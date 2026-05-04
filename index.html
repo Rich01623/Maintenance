@@ -18,8 +18,8 @@
         #login-overlay { position: fixed; inset: 0; z-index: 9999; background: #0f172a; display: flex; align-items: center; justify-content: center; transition: opacity 0.5s ease; }
         .login-box { width: 100%; max-width: 400px; padding: 2.5rem; background: #1e293b; border-radius: 1.5rem; border: 1px solid #334155; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
         
-        aside { width: 340px; background: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.25rem; height: 100vh; flex-shrink: 0; }
-        main { flex-grow: 1; height: 100vh; overflow-y: auto; padding: 1.5rem; }
+        aside { width: 340px; background: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.25rem; height: 100vh; flex-shrink: 0; z-index: 50; }
+        main { flex-grow: 1; height: 100vh; overflow-y: auto; padding: 1.5rem; position: relative; }
         .nav-link { width: 100%; text-align: left; padding: 0.85rem 1.25rem; border-radius: 0.75rem; font-size: 1rem; font-weight: 700; margin-bottom: 0.4rem; color: #94a3b8; transition: all 0.2s; display: flex; align-items: center; gap: 0.75rem; }
         .nav-link.active { background: var(--fleet-red); color: white; box-shadow: 0 4px 12px rgba(225, 29, 72, 0.3); }
         .glass-card { background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1); transition: all 0.2s ease; position: relative; overflow: hidden; padding: 1rem !important; }
@@ -105,6 +105,22 @@
         </div>
     </div>
 
+    <!-- DOCUMENT LIGHTBOX MODAL -->
+    <div id="lightbox-modal" class="fixed inset-0 z-[10000] hidden flex flex-col transition-opacity" style="background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(8px);">
+        <div class="flex justify-between items-center p-4 bg-slate-900 border-b border-slate-700">
+            <h3 class="text-white font-black uppercase tracking-widest text-sm">Document Viewer</h3>
+            <button onclick="closeLightbox()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div class="flex-grow p-4 md:p-8 flex items-center justify-center relative">
+            <div id="lightbox-loader" class="absolute inset-0 flex items-center justify-center z-0">
+                <div class="animate-spin rounded-full h-12 w-12 border-4 border-rose-600 border-t-transparent"></div>
+            </div>
+            <iframe id="lightbox-frame" class="w-full h-full rounded-xl border border-slate-700 bg-white shadow-2xl relative z-10" onload="document.getElementById('lightbox-loader').classList.add('hidden')"></iframe>
+        </div>
+    </div>
+
     <aside id="main-sidebar" class="hidden">
         <div class="mb-6">
             <h1 class="text-2xl font-black uppercase mb-1">FTS<span class="text-rose-600">Maintenance</span></h1>
@@ -117,9 +133,12 @@
         <nav class="mb-4">
             <button id="nav-vehicle" onclick="switchTab('vehicle')" class="nav-link active">VEHICLES</button>
             <button id="nav-trailer" onclick="switchTab('trailer')" class="nav-link">TRAILERS</button>
-            <button id="nav-jcc" onclick="switchTab('jcc')" class="nav-link">FROST CONNECT</button>
+            <button id="nav-jcc" onclick="switchTab('jcc')" class="nav-link flex justify-between items-center">
+                <span>FROST CONNECT</span>
+                <span id="auth-badge" class="hidden bg-rose-600 text-white text-[10px] px-2 py-0.5 rounded-full font-black animate-pulse shadow-[0_0_10px_rgba(225,29,72,0.6)]">!</span>
+            </button>
             <button id="nav-defects" onclick="switchTab('defects')" class="nav-link">DEFECTS</button>
-
+            
             <div class="mt-4 pt-4 border-t border-slate-700">
                 <button onclick="openIsoWeekModal()" class="nav-link !text-slate-300 hover:!text-white hover:bg-slate-800">
                     <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -140,14 +159,14 @@
 
         <div class="flex-grow">
             <button onclick="toggleMode()" class="w-full text-left p-3 rounded-lg hover:bg-slate-800 transition text-sm font-bold text-slate-400 mb-2">◐ Toggle Day/Night</button>
-            <div class="mt-2">
+            <div class="mt-2" id="audit-trail-container">
                 <span class="text-[11px] font-black text-slate-500 uppercase tracking-widest">Audit Trail</span>
                 <div id="report-panel"><p class="text-slate-500 italic">Select card for details.</p></div>
             </div>
         </div>
 
         <div class="pt-4 border-t border-slate-700">
-            <div class="bg-slate-800/40 p-3 rounded-lg mb-3 flex justify-between items-center">
+            <div class="bg-slate-800/40 p-3 rounded-lg mb-3 flex justify-between items-center" id="stat-container">
                 <span id="stat-label" class="text-[11px] text-slate-500 font-bold uppercase">Total Units</span>
                 <span id="stat-total" class="text-xl font-black">--</span>
             </div>
@@ -158,15 +177,29 @@
     </aside>
 
     <main id="main-content" class="hidden">
-        <div id="jcc-header" class="hidden mb-6 flex justify-between items-center">
-            <div class="flex items-center gap-4">
-                <button id="jcc-back" onclick="navigateUp()" class="hidden bg-slate-800 text-slate-300 px-4 py-2 rounded-lg font-bold text-xs uppercase hover:bg-slate-700">← Back</button>
-                <div id="breadcrumb-container" class="flex items-center gap-2 text-sm font-black uppercase text-slate-400">
-                    <span>Frost Docs</span>
+        <!-- Live Fleet Search / JCC Header -->
+        <div id="header-area" class="mb-6 flex gap-4">
+            <div id="jcc-header" class="hidden flex-grow flex justify-between items-center">
+                <div class="flex items-center gap-4">
+                    <button id="jcc-back" onclick="navigateUp()" class="hidden bg-slate-800 text-slate-300 px-4 py-2 rounded-lg font-bold text-xs uppercase hover:bg-slate-700">← Back</button>
+                    <div id="breadcrumb-container" class="flex items-center gap-2 text-sm font-black uppercase text-slate-400">
+                        <span>Frost Docs</span>
+                    </div>
+                </div>
+                <input type="text" id="jcc-search" oninput="filterGrid(this.value)" placeholder="Search files..." class="bg-slate-800 border border-slate-700 px-4 py-2 rounded-lg text-sm text-white outline-none focus:border-rose-600">
+            </div>
+            
+            <div id="fleet-header" class="flex-grow flex justify-between items-center">
+                <h2 id="view-title" class="text-2xl font-black uppercase text-white tracking-widest hidden md:block">VEHICLES</h2>
+                <div class="relative w-full max-w-md ml-auto">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <input type="text" id="fleet-search" oninput="filterGrid(this.value)" placeholder="Search Fleet Reg, Driver, or VIN..." class="pl-10 w-full bg-slate-800 border border-slate-700 px-4 py-3 rounded-xl text-sm font-bold text-white outline-none focus:border-rose-600 transition-colors shadow-lg">
                 </div>
             </div>
-            <input type="text" id="jcc-search" oninput="filterJCC(this.value)" placeholder="Search files..." class="bg-slate-800 border border-slate-700 px-4 py-2 rounded-lg text-sm text-white outline-none focus:border-rose-600">
         </div>
+
         <div id="fleet-grid" class="grid-layout"></div>
     </main>
 
@@ -217,6 +250,8 @@
             document.getElementById('main-sidebar').classList.remove('hidden');
             document.getElementById('main-content').classList.remove('hidden');
             loadFleet();
+            // Start silent queue check
+            setInterval(checkAuthQueue, 30000);
         }
 
         async function handleLogout() {
@@ -227,6 +262,49 @@
         function toggleMode() { 
             document.documentElement.classList.toggle('light'); 
             document.documentElement.classList.toggle('dark'); 
+        }
+
+        // --- NOTIFICATION QUEUE LOGIC ---
+        async function checkAuthQueue() {
+            try {
+                const { data } = await supabaseClient.storage.from('maintenance_docs').list('AUTHORISE', { limit: 100 });
+                if (data) {
+                    const count = data.filter(f => f.name !== '.emptyFolderPlaceholder').length;
+                    const badge = document.getElementById('auth-badge');
+                    if (count > 0) {
+                        badge.innerText = count;
+                        badge.classList.remove('hidden');
+                    } else {
+                        badge.classList.add('hidden');
+                    }
+                }
+            } catch(e) {}
+        }
+
+        // --- LIGHTBOX LOGIC ---
+        function openLightbox(url) {
+            document.getElementById('lightbox-modal').classList.remove('hidden');
+            document.getElementById('lightbox-loader').classList.remove('hidden');
+            document.getElementById('lightbox-frame').src = url;
+        }
+
+        function closeLightbox() {
+            document.getElementById('lightbox-modal').classList.add('hidden');
+            document.getElementById('lightbox-frame').src = '';
+        }
+
+        // --- LIVE SEARCH LOGIC ---
+        function filterGrid(query) {
+            const lowerQuery = query.toLowerCase();
+            const cards = document.querySelectorAll('#fleet-grid > div');
+            cards.forEach(card => {
+                const searchableText = card.getAttribute('data-search') || card.innerText;
+                if (searchableText.toLowerCase().includes(lowerQuery)) {
+                    card.style.display = '';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
         }
 
         // --- ISO WEEK CALCULATOR UI FUNCTIONS ---
@@ -277,6 +355,10 @@
             currentTab = tab; 
             localStorage.setItem('fts_current_tab', tab);
             
+            // Clear searches
+            document.getElementById('fleet-search').value = "";
+            document.getElementById('jcc-search').value = "";
+            
             const tabs = ['vehicle', 'trailer', 'jcc', 'defects'];
             tabs.forEach(t => {
                 const btn = document.getElementById(`nav-${t}`);
@@ -286,23 +368,37 @@
             const addBtn = document.getElementById('add-unit-btn');
             const reportBtn = document.getElementById('btn-fleet-report');
             const controls = document.getElementById('sidebar-controls');
+            const auditTrail = document.getElementById('audit-trail-container');
+            const statContainer = document.getElementById('stat-container');
             const jccHeader = document.getElementById('jcc-header');
-            const statLabel = document.getElementById('stat-label');
+            const fleetHeader = document.getElementById('fleet-header');
+            const viewTitle = document.getElementById('view-title');
 
             if(tab === 'jcc') {
                 if(addBtn) addBtn.style.display = 'none'; 
                 if(reportBtn) reportBtn.style.display = 'none'; 
                 if(controls) controls.style.display = 'none';
+                if(auditTrail) auditTrail.style.display = 'none';
+                if(statContainer) statContainer.style.display = 'none';
+                
+                fleetHeader.classList.add('hidden');
                 jccHeader.classList.remove('hidden'); 
-                statLabel.innerText = "FOLDERS"; 
                 currentPath = [];
                 loadJCCFiles();
             } else {
                 if(addBtn) addBtn.style.display = (tab === 'defects') ? 'none' : 'block';
                 if(reportBtn) reportBtn.style.display = (tab === 'defects') ? 'none' : 'block';
                 if(controls) controls.style.display = (tab === 'defects') ? 'none' : 'block'; 
+                if(auditTrail) auditTrail.style.display = 'block';
+                if(statContainer) statContainer.style.display = 'flex';
+                
                 jccHeader.classList.add('hidden');
-                statLabel.innerText = (tab === 'defects') ? "DEFECTS FOUND" : "TOTAL UNITS";
+                fleetHeader.classList.remove('hidden');
+                viewTitle.innerText = tab.toUpperCase();
+                
+                const statLabel = document.getElementById('stat-label');
+                if(statLabel) statLabel.innerText = (tab === 'defects') ? "DEFECTS FOUND" : "TOTAL UNITS";
+                
                 loadFleet(); 
             }
         }
@@ -316,6 +412,9 @@
 
         async function loadFleet() {
             try {
+                // Background check queue
+                checkAuthQueue();
+
                 const [vResponse, tResponse, cResponse, tcResponse] = await Promise.all([
                     supabaseClient.from('vehicles').select('*'),
                     supabaseClient.from('trailers').select('*'),
@@ -329,7 +428,9 @@
                 const tChecks = (tcResponse.data || []).map(item => ({ ...item, _origin: 'daily_trailer_checks' }));
                 cachedChecks = [...vChecks, ...tChecks].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
                 
-                renderFleet();
+                if (currentTab !== 'jcc') {
+                    renderFleet();
+                }
             } catch (err) { console.error("Load Error:", err); }
         }
 
@@ -423,8 +524,9 @@
                 defectReports.forEach(report => {
                     const date = new Date(report.created_at).toLocaleDateString('en-GB');
                     const unitID = report.registration || report.trailer_number || 'N/A'; 
+                    // Add data-search attribute for the search bar
                     tableHTML += `
-                        <tr class="defect-row">
+                        <tr class="defect-row" data-search="${unitID} ${report.driver_name} ${report.defect_details}">
                             <td class="font-black text-slate-400 whitespace-nowrap">${date}</td>
                             <td><span class="plate-badge plate-critical">${unitID}</span></td>
                             <td class="font-bold uppercase whitespace-nowrap">${report.driver_name || 'Unknown'}</td>
@@ -484,6 +586,8 @@
 
                 const card = document.createElement('div');
                 card.className = `glass-card rounded-xl ${v.is_vor ? 'card-vor' : ''}`;
+                // Setup search data attribute
+                card.setAttribute('data-search', `${v.registration_number} ${v.vin_number || ''}`);
                 
                 let vehicleSpecifics = !isTrailer ? `
                     <div class="grid grid-cols-2 gap-3">
@@ -550,6 +654,10 @@
                     </div></div>`;
                 grid.appendChild(card);
             });
+            
+            // Trigger search filter just in case there's text in the bar
+            const searchQuery = document.getElementById('fleet-search').value;
+            if (searchQuery) filterGrid(searchQuery);
         }
 
         window.triggerUpload = (reg, field, table) => {
@@ -713,7 +821,6 @@
                         isCompliance = true;
                         compType = 'date';
                     } else if (rawFolder.toLowerCase() === 'tachographcalibration' || rawFolder.toLowerCase() === 'tachocalibration' || rawFolder.toLowerCase() === 'tachograph_service_due') {
-                        // FIXED: Added tachographcalibration to explicitly catch the sister app dropdown text!
                         dbColumn = 'tachograph_service_due';
                         isCompliance = true;
                         compType = 'date';
@@ -776,11 +883,27 @@
                             parsedDate = new Date(nextDatePrompt);
                         }
 
+                        // --- FAT FINGER SAFEGUARDS ---
                         if (isNaN(parsedDate.getTime())) {
                             await supabaseClient.storage.from('maintenance_docs').move(cleanNewPath, cleanFilePath);
                             return alert("Authorisation cancelled. The date format was not recognised.");
                         }
                         
+                        const today = new Date();
+                        today.setHours(0,0,0,0);
+                        const maxFuture = new Date();
+                        maxFuture.setFullYear(maxFuture.getFullYear() + 2); // Max 2 years in the future
+                        
+                        if (parsedDate < today) {
+                            await supabaseClient.storage.from('maintenance_docs').move(cleanNewPath, cleanFilePath);
+                            return alert("SAFETY LOCK: Authorisation cancelled. You cannot enter a compliance expiration date in the past.");
+                        }
+                        if (parsedDate > maxFuture) {
+                            await supabaseClient.storage.from('maintenance_docs').move(cleanNewPath, cleanFilePath);
+                            return alert("SAFETY LOCK: Authorisation cancelled. Date exceeds 2 years in the future. Please double-check the year entered.");
+                        }
+                        // ------------------------------
+
                         updateDateStr = parsedDate.toISOString().split('T')[0];
 
                     } else {
@@ -989,9 +1112,10 @@
                     const existingNote = fileNotesMap[fullFilePath];
                     const noteHtml = existingNote ? `<div class="mt-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded text-amber-500 text-[10px] font-bold italic leading-tight"><b>Note:</b> ${existingNote}</div>` : '';
 
+                    // UPDATED: Now uses openLightbox instead of opening in a new tab
                     let actionButtons = `
                         <div class="flex gap-1 mt-4">
-                            <a href="${url.publicUrl}" target="_blank" class="flex-[2] bg-rose-600 hover:bg-rose-500 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors flex items-center justify-center">View</a>
+                            <button onclick="openLightbox('${url.publicUrl}')" class="flex-[2] bg-rose-600 hover:bg-rose-500 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors flex items-center justify-center">View</button>
                             <button onclick="addFileNote('${fullFilePath}')" class="flex-[1.5] bg-amber-500 hover:bg-amber-400 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors">${existingNote ? 'Edit Note' : 'Add Note'}</button>
                             <button onclick="deleteFile('${fullFilePath}')" class="flex-1 bg-slate-800 hover:bg-red-700 text-slate-300 hover:text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors">Del</button>
                         </div>
@@ -1000,7 +1124,7 @@
                     if (folderPath.toUpperCase().includes('AUTHORIS')) {
                         actionButtons = `
                             <div class="flex gap-1 mt-4">
-                                <a href="${url.publicUrl}" target="_blank" class="flex-1 bg-slate-600 hover:bg-slate-500 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors flex items-center justify-center">View</a>
+                                <button onclick="openLightbox('${url.publicUrl}')" class="flex-1 bg-slate-600 hover:bg-slate-500 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors flex items-center justify-center">View</button>
                                 <button onclick="authoriseFile('${fullFilePath}')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors">Auth</button>
                                 <button onclick="rejectFile('${fullFilePath}')" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors">Reject</button>
                                 <button onclick="addFileNote('${fullFilePath}')" class="flex-1 bg-amber-500 hover:bg-amber-400 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors">Note</button>
@@ -1010,7 +1134,7 @@
                     }
 
                     return `
-                        <div class="glass-card p-4 flex flex-col justify-between border-l-4 border-l-rose-600">
+                        <div class="glass-card p-4 flex flex-col justify-between border-l-4 border-l-rose-600" data-search="${displayName}">
                             <div>
                                 <h3 class="font-black text-xs uppercase break-all">${displayName}</h3>
                                 ${dateDisplay}
@@ -1020,6 +1144,10 @@
                         </div>`;
                 }
             }).join('');
+            
+            // Trigger search filter just in case
+            const searchQuery = document.getElementById('jcc-search').value;
+            if (searchQuery) filterGrid(searchQuery);
         }
 
         function navigateDown(folderName) {
@@ -1051,11 +1179,6 @@
                 html += ` <span class="text-slate-600">/</span> <span class="breadcrumb-item" onclick="navigateToPathIndex(${index})">${folder}</span>`;
             });
             container.innerHTML = html;
-        }
-
-        function filterJCC(query) {
-            const cards = document.querySelectorAll('#fleet-grid .glass-card');
-            cards.forEach(c => { c.style.display = c.innerText.toLowerCase().includes(query.toLowerCase()) ? 'flex' : 'none'; });
         }
 
         function getHealthStatus(v) {
