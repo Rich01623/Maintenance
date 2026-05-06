@@ -338,8 +338,9 @@
             return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
         }
 
+        // ADDED NOON (12:00:00) FIX TO PREVENT TIMEZONE SHIFTS
         function getDateFromISOWeek(week, year) {
-            const simple = new Date(year, 0, 1 + (week - 1) * 7);
+            const simple = new Date(year, 0, 1 + (week - 1) * 7, 12, 0, 0);
             const dow = simple.getDay();
             const ISOweekStart = simple;
             if (dow <= 4)
@@ -917,9 +918,15 @@
                         let testWeek = parseInt(testWeekStr);
                         let currentYr = new Date().getFullYear();
                         
+                        // NEW FIX: Local time construction to avoid timezone shifts!
                         let baseDate = getDateFromISOWeek(testWeek, currentYr);
+                        baseDate.setHours(12, 0, 0, 0); // Anchor to noon to prevent midnight DST bugs
                         baseDate.setDate(baseDate.getDate() + 42); 
-                        updateDateStr = baseDate.toISOString().split('T')[0];
+                        
+                        const yyyy = baseDate.getFullYear();
+                        const mm = String(baseDate.getMonth() + 1).padStart(2, '0');
+                        const dd = String(baseDate.getDate()).padStart(2, '0');
+                        updateDateStr = `${yyyy}-${mm}-${dd}`;
                     }
                     
                     const { error: dbErr } = await supabaseClient.from(table)
@@ -1112,7 +1119,6 @@
                     const existingNote = fileNotesMap[fullFilePath];
                     const noteHtml = existingNote ? `<div class="mt-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded text-amber-500 text-[10px] font-bold italic leading-tight"><b>Note:</b> ${existingNote}</div>` : '';
 
-                    // UPDATED: Now uses openLightbox instead of opening in a new tab
                     let actionButtons = `
                         <div class="flex gap-1 mt-4">
                             <button onclick="openLightbox('${url.publicUrl}')" class="flex-[2] bg-rose-600 hover:bg-rose-500 text-white text-center py-2 rounded text-[9px] font-black uppercase transition-colors flex items-center justify-center">View</button>
