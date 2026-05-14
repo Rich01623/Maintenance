@@ -42,10 +42,6 @@
         .card-vor .vor-stamp { opacity: 0.9; }
         .card-vor .content-fade { opacity: 0.3; filter: grayscale(1); }
         .grid-layout { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1rem; }
-        #report-panel { background: rgba(0,0,0,0.1); border: 1px dashed var(--border-color); border-radius: 0.75rem; padding: 1rem; font-size: 0.85rem; margin-top: 0.75rem; max-height: 350px; overflow-y: auto; }
-        .report-item { margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color); }
-        .sort-btn { background: #334155; color: #cbd5e1; border: 1px solid #475569; padding: 0.5rem; border-radius: 0.5rem; font-size: 11px; font-weight: 800; width: 100%; text-align: center; cursor: pointer; transition: 0.2s; }
-        .sort-btn.active { background: #475569; color: white; border-color: #94a3b8; }
         .folder-card { cursor: pointer; border-left: 4px solid var(--fleet-red); }
         .breadcrumb-item { cursor: pointer; color: #94a3b8; transition: color 0.2s; }
         .breadcrumb-item:hover { color: #e11d48; }
@@ -63,11 +59,15 @@
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
         
-        /* Custom Scrollbar for Calendar */
-        .planner-scroll::-webkit-scrollbar { height: 10px; }
+        /* Custom Scrollbar for Calendar & History */
+        .planner-scroll::-webkit-scrollbar { height: 10px; width: 10px; }
         .planner-scroll::-webkit-scrollbar-track { background: var(--bg-main); border-radius: 8px; }
         .planner-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 8px; }
         .planner-scroll::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* Force Calendar Icon to white in dark mode */
+        .dark ::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; opacity: 0.7; transition: opacity 0.2s; }
+        .dark ::-webkit-calendar-picker-indicator:hover { opacity: 1; }
     </style>
 </head>
 <body class="dark">
@@ -128,8 +128,31 @@
         </div>
     </div>
 
+    <!-- AUDIT HISTORY MODAL -->
+    <div id="history-modal" class="fixed inset-0 z-[10000] hidden flex items-center justify-center transition-opacity" style="background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(6px);">
+        <div class="glass-card w-full max-w-3xl p-6 relative animate-fade-in flex flex-col" style="background: var(--card-bg); border-radius: 1.5rem; border: 1px solid var(--border-color); max-height: 85vh;">
+            <div class="flex justify-between items-center mb-6 border-b border-slate-700 pb-4 shrink-0">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 rounded-xl bg-indigo-500/10 text-indigo-500 shadow-inner">
+                        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-black uppercase tracking-tight text-white" id="history-modal-title">Audit History</h3>
+                        <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1" id="history-modal-subtitle">Loading...</p>
+                    </div>
+                </div>
+                <button onclick="closeHistoryModal()" class="text-slate-400 hover:text-rose-500 transition-colors bg-slate-800 hover:bg-slate-700 p-2.5 rounded-xl border border-slate-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="history-content" class="overflow-y-auto pr-3 flex-grow space-y-4 planner-scroll">
+                <!-- Dynamic content injects here -->
+            </div>
+        </div>
+    </div>
+
     <aside id="main-sidebar" class="hidden">
-        <div class="mb-6">
+        <div class="mb-4">
             <h1 class="text-2xl font-black uppercase mb-1">FTS<span class="text-rose-600">Maintenance</span></h1>
             <div class="flex items-center gap-2 flex-wrap">
                 <p class="text-[10px] text-slate-500 uppercase tracking-widest font-black">● Live Sync</p>
@@ -137,9 +160,10 @@
             </div>
         </div>
         
-        <nav class="mb-4">
+        <nav class="mb-3">
             <button id="nav-vehicle" onclick="switchTab('vehicle')" class="nav-link active">VEHICLES</button>
             <button id="nav-trailer" onclick="switchTab('trailer')" class="nav-link">TRAILERS</button>
+            <button id="nav-tyres" onclick="switchTab('tyres')" class="nav-link">TYRES & WHEELS</button>
             <button id="nav-planner" onclick="switchTab('planner')" class="nav-link">PLANNER</button>
             <button id="nav-jcc" onclick="switchTab('jcc')" class="nav-link flex justify-between items-center">
                 <span>FROST CONNECT</span>
@@ -147,70 +171,86 @@
             </button>
             <button id="nav-defects" onclick="switchTab('defects')" class="nav-link">DEFECTS</button>
             
-            <!-- NEW SCHEDULE BUTTON -->
-            <a href="https://rich01623.github.io/standalonemaintenanceschedule/" target="_blank" class="nav-link flex justify-between items-center">
+            <a href="https://rich01623.github.io/standalonemaintenanceschedule/" target="_blank" class="nav-link flex justify-between items-center mt-2">
                 <span>SCHEDULE</span>
                 <svg class="w-4 h-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
             </a>
-            
-            <div class="mt-4 pt-4 border-t border-slate-700">
-                <button onclick="openIsoWeekModal()" class="nav-link !text-slate-300 hover:!text-white hover:bg-slate-800">
-                    <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                    WHAT ISO WEEK?
-                </button>
-            </div>
+
+            <!-- UPLOAD DOCUMENTS BUTTON -->
+            <a href="https://rich01623.github.io/JCCPortal/" target="_blank" class="nav-link flex justify-between items-center">
+                <span>UPLOAD DOCS</span>
+                <svg class="w-4 h-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+            </a>
         </nav>
 
-        <div id="sidebar-controls">
-            <div class="mb-6">
-                <p class="text-[10px] text-slate-500 font-black uppercase mb-2">Sorting Preference</p>
-                <div class="flex gap-2">
-                    <button id="sort-alpha" onclick="setSort('alpha')" class="sort-btn active">A-Z</button>
-                    <button id="sort-date" onclick="setSort('date')" class="sort-btn">DUE DATE</button>
-                </div>
-            </div>
+        <div class="flex-grow flex flex-col min-h-0 pt-2 border-t border-slate-700">
+            <!-- Audit Trail Removed per request, freeing up space -->
         </div>
 
-        <div class="flex-grow">
-            <button onclick="toggleMode()" class="w-full text-left p-3 rounded-lg hover:bg-slate-800 transition text-sm font-bold text-slate-400 mb-2">◐ Toggle Day/Night</button>
-            <div class="mt-2" id="audit-trail-container">
-                <span class="text-[11px] font-black text-slate-500 uppercase tracking-widest">Audit Trail</span>
-                <div id="report-panel"><p class="text-slate-500 italic">Select card for details.</p></div>
-            </div>
-        </div>
-
-        <div class="pt-4 border-t border-slate-700">
-            <div class="bg-slate-800/40 p-3 rounded-lg mb-3 flex justify-between items-center" id="stat-container">
+        <div class="pt-3 mt-3">
+            <div class="bg-slate-800/40 p-2 px-3 rounded-lg mb-2 flex justify-between items-center" id="stat-container">
                 <span id="stat-label" class="text-[11px] text-slate-500 font-bold uppercase">Total Units</span>
-                <span id="stat-total" class="text-xl font-black">--</span>
+                <span id="stat-total" class="text-lg font-black">--</span>
             </div>
-            <button id="btn-fleet-report" onclick="generateFullFleetPDF()" class="w-full bg-slate-700 text-white py-3 rounded-xl text-[11px] font-black hover:bg-slate-600 transition-all uppercase mb-2">Generate Fleet Report</button>
-            <button id="add-unit-btn" onclick="window.addNewUnit()" class="w-full bg-rose-600 text-white py-3.5 rounded-xl text-sm font-bold hover:bg-rose-500 transition-all uppercase mb-2">+ Add Unit</button>
-            <button onclick="handleLogout()" class="w-full text-slate-500 py-2 text-[10px] font-black uppercase hover:text-rose-500 transition-colors">Sign Out</button>
+            
+            <!-- PULL WEEK REPORT BUTTON -->
+            <button id="btn-pull-week" onclick="window.pullWeekReport()" class="w-full bg-slate-700 text-white py-2.5 rounded-xl text-[11px] font-black hover:bg-slate-600 transition-all uppercase mb-1.5">Pull Week Report</button>
+            
+            <button id="btn-fleet-report" onclick="generateFullFleetPDF()" class="w-full bg-slate-700 text-white py-2.5 rounded-xl text-[11px] font-black hover:bg-slate-600 transition-all uppercase mb-1.5">Generate Fleet Report</button>
+            <button id="add-unit-btn" onclick="window.addNewUnit()" class="w-full bg-rose-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-rose-500 transition-all uppercase mb-1.5">+ Add Unit</button>
+            <button onclick="handleLogout()" class="w-full text-slate-500 py-1.5 text-[10px] font-black uppercase hover:text-rose-500 transition-colors">Sign Out</button>
         </div>
     </aside>
 
     <main id="main-content" class="hidden">
-        <!-- Live Fleet Search / JCC Header -->
-        <div id="header-area" class="mb-6 flex gap-4">
-            <div id="jcc-header" class="hidden flex-grow flex justify-between items-center">
-                <div class="flex items-center gap-4">
-                    <button id="jcc-back" onclick="navigateUp()" class="hidden bg-slate-800 text-slate-300 px-4 py-2 rounded-lg font-bold text-xs uppercase hover:bg-slate-700">← Back</button>
-                    <div id="breadcrumb-container" class="flex items-center gap-2 text-sm font-black uppercase text-slate-400">
-                        <span>Frost Docs</span>
-                    </div>
+        
+        <!-- Live Fleet Search & Global Top Controls Header -->
+        <div id="header-area" class="mb-6 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+            
+            <!-- JCC Header Left side (Breadcrumbs) -->
+            <div id="jcc-header-left" class="hidden flex items-center gap-4">
+                <button id="jcc-back" onclick="navigateUp()" class="hidden bg-slate-800 text-slate-300 px-4 py-2 rounded-lg font-bold text-xs uppercase hover:bg-slate-700">← Back</button>
+                <div id="breadcrumb-container" class="flex items-center gap-2 text-sm font-black uppercase text-slate-400">
+                    <span>Frost Docs</span>
                 </div>
-                <input type="text" id="jcc-search" oninput="filterGrid(this.value)" placeholder="Search files..." class="bg-slate-800 border border-slate-700 px-4 py-2 rounded-lg text-sm text-white outline-none focus:border-rose-600">
             </div>
             
-            <div id="fleet-header" class="flex-grow flex justify-between items-center">
+            <!-- Fleet Header Left side (Title) -->
+            <div id="fleet-header-left" class="flex-grow">
                 <h2 id="view-title" class="text-2xl font-black uppercase text-white tracking-widest hidden md:block">VEHICLES</h2>
-                <div class="relative w-full max-w-md ml-auto" id="search-container">
+            </div>
+            
+            <!-- Right side global controls -->
+            <div class="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end ml-auto">
+                
+                <!-- Sorting Toggle -->
+                <div id="top-sorting" class="flex bg-slate-800 p-1 rounded-lg border border-slate-700 h-10 items-center">
+                    <button id="sort-alpha" onclick="setSort('alpha')" class="px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest transition-all bg-rose-600 text-white shadow-md">A-Z</button>
+                    <button id="sort-date" onclick="setSort('date')" class="px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest transition-all text-slate-500 hover:text-white">DUE</button>
+                </div>
+                
+                <!-- ISO Calculator -->
+                <button onclick="openIsoWeekModal()" class="flex items-center justify-center bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 h-10 rounded-lg transition-colors" title="ISO Week Calculator">
+                    <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <span class="ml-2 text-[10px] font-black uppercase tracking-widest hidden lg:block">ISO Calc</span>
+                </button>
+                
+                <!-- Day/Night Toggle -->
+                <button onclick="toggleMode()" class="flex items-center justify-center bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 h-10 rounded-lg transition-colors text-lg" title="Toggle Day/Night">
+                    ◐
+                </button>
+
+                <!-- JCC Search Bar -->
+                <input type="text" id="jcc-search" oninput="filterGrid(this.value)" placeholder="Search files..." class="hidden bg-slate-800 border border-slate-700 px-4 h-10 rounded-xl text-sm font-bold text-white outline-none focus:border-rose-600 transition-colors shadow-lg w-full sm:w-64">
+
+                <!-- Fleet Search Bar -->
+                <div class="relative w-full sm:w-64" id="search-container">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                     </div>
-                    <input type="text" id="fleet-search" oninput="filterGrid(this.value)" placeholder="Search Fleet Reg, Driver, or VIN..." class="pl-10 w-full bg-slate-800 border border-slate-700 px-4 py-3 rounded-xl text-sm font-bold text-white outline-none focus:border-rose-600 transition-colors shadow-lg">
+                    <input type="text" id="fleet-search" oninput="filterGrid(this.value)" placeholder="Search Fleet Reg, Driver, or VIN..." class="pl-10 w-full h-10 bg-slate-800 border border-slate-700 px-4 rounded-xl text-sm font-bold text-white outline-none focus:border-rose-600 transition-colors shadow-lg">
                 </div>
+                
             </div>
         </div>
 
@@ -374,7 +414,7 @@
             document.getElementById('fleet-search').value = "";
             document.getElementById('jcc-search').value = "";
             
-            const tabs = ['vehicle', 'trailer', 'planner', 'jcc', 'defects'];
+            const tabs = ['vehicle', 'trailer', 'tyres', 'planner', 'jcc', 'defects'];
             tabs.forEach(t => {
                 const btn = document.getElementById(`nav-${t}`);
                 if(btn) btn.classList.toggle('active', tab === t);
@@ -382,50 +422,79 @@
 
             const addBtn = document.getElementById('add-unit-btn');
             const reportBtn = document.getElementById('btn-fleet-report');
-            const controls = document.getElementById('sidebar-controls');
-            const auditTrail = document.getElementById('audit-trail-container');
+            const pullWeekBtn = document.getElementById('btn-pull-week');
+            const topSorting = document.getElementById('top-sorting');
             const statContainer = document.getElementById('stat-container');
-            const jccHeader = document.getElementById('jcc-header');
-            const fleetHeader = document.getElementById('fleet-header');
+            
+            // Header parts
+            const jccHeaderLeft = document.getElementById('jcc-header-left');
+            const jccSearch = document.getElementById('jcc-search');
+            const fleetHeaderLeft = document.getElementById('fleet-header-left');
             const searchContainer = document.getElementById('search-container');
             const viewTitle = document.getElementById('view-title');
 
             if(tab === 'jcc') {
                 if(addBtn) addBtn.style.display = 'none'; 
                 if(reportBtn) reportBtn.style.display = 'none'; 
-                if(controls) controls.style.display = 'none';
-                if(auditTrail) auditTrail.style.display = 'none';
+                if(pullWeekBtn) pullWeekBtn.style.display = 'none';
+                if(topSorting) topSorting.style.display = 'none';
                 if(statContainer) statContainer.style.display = 'none';
                 
-                fleetHeader.classList.add('hidden');
-                jccHeader.classList.remove('hidden'); 
+                fleetHeaderLeft.classList.add('hidden');
+                searchContainer.classList.add('hidden');
+                
+                jccHeaderLeft.classList.remove('hidden'); 
+                jccHeaderLeft.classList.add('flex');
+                jccSearch.classList.remove('hidden');
                 currentPath = [];
                 loadJCCFiles();
             } else if(tab === 'planner') {
                 if(addBtn) addBtn.style.display = 'none'; 
                 if(reportBtn) reportBtn.style.display = 'none'; 
-                if(controls) controls.style.display = 'none';
-                if(auditTrail) auditTrail.style.display = 'none';
+                if(pullWeekBtn) pullWeekBtn.style.display = 'none';
+                if(topSorting) topSorting.style.display = 'none';
                 if(statContainer) statContainer.style.display = 'flex';
                 
-                jccHeader.classList.add('hidden');
-                fleetHeader.classList.remove('hidden');
-                searchContainer.classList.add('hidden'); // Hide search on planner
+                jccHeaderLeft.classList.add('hidden');
+                jccHeaderLeft.classList.remove('flex');
+                jccSearch.classList.add('hidden');
+                
+                fleetHeaderLeft.classList.remove('hidden');
+                searchContainer.classList.add('hidden'); 
                 viewTitle.innerText = "PLANNER";
                 
                 const statLabel = document.getElementById('stat-label');
                 if(statLabel) statLabel.innerText = "TOTAL UNITS";
                 
                 loadFleet();
+            } else if(tab === 'tyres') {
+                if(addBtn) addBtn.style.display = 'none'; 
+                if(reportBtn) reportBtn.style.display = 'none'; 
+                if(pullWeekBtn) pullWeekBtn.style.display = 'none';
+                if(topSorting) topSorting.style.display = 'none';
+                if(statContainer) statContainer.style.display = 'none';
+                
+                jccHeaderLeft.classList.add('hidden');
+                jccHeaderLeft.classList.remove('flex');
+                jccSearch.classList.add('hidden');
+                
+                fleetHeaderLeft.classList.remove('hidden');
+                searchContainer.classList.add('hidden'); 
+                viewTitle.innerText = "TYRES & WHEELS";
+                
+                loadFleet();
             } else {
                 if(addBtn) addBtn.style.display = (tab === 'defects') ? 'none' : 'block';
                 if(reportBtn) reportBtn.style.display = (tab === 'defects') ? 'none' : 'block';
-                if(controls) controls.style.display = (tab === 'defects') ? 'none' : 'block'; 
-                if(auditTrail) auditTrail.style.display = 'block';
+                if(pullWeekBtn) pullWeekBtn.style.display = (tab === 'defects') ? 'none' : 'block';
+                if(topSorting) topSorting.style.display = (tab === 'defects') ? 'none' : 'flex'; 
                 if(statContainer) statContainer.style.display = 'flex';
                 
-                jccHeader.classList.add('hidden');
-                fleetHeader.classList.remove('hidden');
+                jccHeaderLeft.classList.add('hidden');
+                jccHeaderLeft.classList.remove('flex');
+                jccSearch.classList.add('hidden');
+                
+                fleetHeaderLeft.classList.remove('hidden');
                 searchContainer.classList.remove('hidden');
                 viewTitle.innerText = tab.toUpperCase();
                 
@@ -438,8 +507,8 @@
 
         function setSort(mode) { 
             sortMode = mode; 
-            document.getElementById('sort-alpha').classList.toggle('active', mode === 'alpha'); 
-            document.getElementById('sort-date').classList.toggle('active', mode === 'date'); 
+            document.getElementById('sort-alpha').className = `px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'alpha' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-500 hover:text-white'}`;
+            document.getElementById('sort-date').className = `px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'date' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-500 hover:text-white'}`;
             renderFleet(); 
         }
 
@@ -500,7 +569,44 @@
             else loadFleet();
         }
 
-        // --- NEW: 6 MONTH PLANNER RENDERER ---
+        // --- HISTORY MODAL LOGIC ---
+        function closeHistoryModal() {
+            document.getElementById('history-modal').classList.add('hidden');
+        }
+
+        window.generateReport = (reg, full) => {
+            const reports = cachedChecks.filter(c => (c.registration || c.trailer_number || '').toUpperCase().replace(/\s+/g, '') === reg.toUpperCase().replace(/\s+/g, ''));
+            const panel = document.getElementById('history-content');
+            
+            document.getElementById('history-modal-title').innerText = `${reg} Audit History`;
+            document.getElementById('history-modal-subtitle').innerText = `${reports.length} Records Found`;
+            
+            if (reports.length === 0) {
+                panel.innerHTML = `<div class="p-10 text-center text-slate-500 font-bold uppercase tracking-widest border-2 border-dashed border-slate-700 rounded-xl">No history found for this unit.</div>`;
+            } else {
+                panel.innerHTML = reports.map(r => {
+                    const isResolved = r.condition_status && r.condition_status.toLowerCase().includes('resolved');
+                    const statusColor = isResolved ? 'text-green-500' : 'text-rose-400';
+                    
+                    return `
+                    <div class="bg-slate-800/50 p-5 rounded-xl border border-slate-700 shadow-sm hover:shadow-md transition-shadow">
+                        <div class="flex justify-between items-start mb-3 border-b border-slate-700 pb-3">
+                            <span class="font-black text-[13px] text-white tracking-wide">${new Date(r.created_at).toLocaleDateString('en-GB')} <span class="text-slate-400 ml-1 font-bold">${new Date(r.created_at).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'})}</span></span>
+                            <span class="font-black text-[10px] uppercase px-3 py-1 rounded bg-slate-900 ${statusColor}">${r.condition_status}</span>
+                        </div>
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Reported By:</span>
+                            <span class="text-xs font-bold text-slate-200">${r.driver_name || 'System'}</span>
+                        </div>
+                        <p class="text-slate-300 text-sm italic leading-relaxed border-l-2 border-slate-600 pl-4 py-1">${r.defect_details || 'No additional notes provided.'}</p>
+                    </div>`;
+                }).join('');
+            }
+            
+            document.getElementById('history-modal').classList.remove('hidden');
+        };
+
+        // --- 6 MONTH PLANNER RENDERER ---
         function renderCalendar() {
             const grid = document.getElementById('fleet-grid'); 
             grid.innerHTML = '';
@@ -528,9 +634,8 @@
             // 3. Build HTML
             let html = `
             <div class="col-span-full glass-card overflow-hidden flex flex-col" style="padding:0 !important; height: calc(100vh - 180px);">
-                <div class="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 flex-wrap gap-4">
+                <div class="p-4 md:p-6 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 flex-wrap gap-4">
                     <div class="flex items-center gap-4 flex-wrap">
-                        <h2 class="text-xl font-black uppercase text-white tracking-widest">6-Month Planner</h2>
                         <div class="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
                             <button onclick="setPlannerView('vehicles')" class="px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${plannerView === 'vehicles' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-500 hover:text-white'}">Vehicles</button>
                             <button onclick="setPlannerView('trailers')" class="px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${plannerView === 'trailers' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-500 hover:text-white'}">Trailers</button>
@@ -598,7 +703,19 @@
             const grid = document.getElementById('fleet-grid'); 
             grid.innerHTML = '';
             
-            if (currentTab === 'jcc' || currentTab === 'planner') return;
+            if (currentTab === 'jcc' || currentTab === 'planner' || currentTab === 'tyres') {
+                if (currentTab === 'tyres') {
+                    grid.innerHTML = `
+                        <div class="col-span-full glass-card p-12 text-center border-dashed border-2 border-slate-700 bg-slate-800/20 mt-4">
+                            <div class="inline-flex items-center justify-center p-4 rounded-full bg-slate-800 mb-4">
+                                <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                            </div>
+                            <h3 class="text-xl font-black text-white uppercase tracking-widest mb-2">Module In Development</h3>
+                            <p class="text-slate-500 font-bold text-sm">The Tyres & Wheels management feature is currently being built and will be available in a future update.</p>
+                        </div>`;
+                }
+                return;
+            }
 
             // --- DEFECTS TAB LOGIC ---
             if (currentTab === 'defects') {
@@ -718,6 +835,10 @@
                 const isTachoDue = !tachoDateObj || (tachoDateObj - new Date()) / 86400000 < 28;
                 const tachoDisplay = tachoDateObj ? tachoDateObj.toLocaleDateString('en-GB') : '--';
 
+                const roadTaxDateObj = v.road_tax_due ? new Date(v.road_tax_due) : null;
+                const isRoadTaxDue = !roadTaxDateObj || (roadTaxDateObj - new Date()) / 86400000 < 28;
+                const roadTaxDisplay = roadTaxDateObj ? roadTaxDateObj.toLocaleDateString('en-GB') : '--';
+
                 const card = document.createElement('div');
                 card.className = `glass-card rounded-xl ${v.is_vor ? 'card-vor' : ''}`;
                 // Setup search data attribute
@@ -733,7 +854,10 @@
                             <span class="label-heading">PMI Week</span>
                             ${isPmiDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'pmi_due', 'vehicles')" class="btn-compliance">Upload PMI</button>` : `<div class="week-display">WEEK ${pmiWk || '--'}</div>`}
                         </div>
-                        <div><span class="label-heading">Road Tax</span><input type="date" value="${v.road_tax_due || ''}" onchange="window.save('${v.registration_number}', 'road_tax_due', this.value, 'vehicles')"></div>
+                        <div>
+                            <span class="label-heading">Road Tax</span>
+                            ${isRoadTaxDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'road_tax_due', 'vehicles')" class="btn-compliance">Upload Tax</button>` : `<div class="week-display">${roadTaxDisplay}</div>`}
+                        </div>
                         <div>
                             <span class="label-heading">Brake Test Week</span>
                             ${isBrakeDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'brake_test', 'vehicles')" class="btn-compliance">Upload Brake</button>` : `<div class="week-display">WEEK ${brakeWk || '--'}</div>`}
@@ -773,7 +897,7 @@
                     <div class="flex justify-between items-center mb-3 relative z-30">
                         <div class="flex flex-wrap items-center gap-1.5">
                             <div class="plate-badge ${getHealthStatus(v)}">${v.registration_number}</div>
-                            ${!isTrailer ? `<button onclick="generatePDF('${v.registration_number}')" class="btn-action btn-pdf">PDF</button>` : ''}
+                            <button onclick="generatePDF('${v.registration_number}')" class="btn-action btn-pdf">PDF</button>
                             <button onclick="generateReport('${v.registration_number}', true)" class="btn-action btn-history">History</button>
                             <button onclick="generateReport('${v.registration_number}', false)" class="btn-action ${hasActiveDefect ? 'defect-active' : ''}">${hasActiveDefect ? 'Defect' : 'Clear'}</button>
                         </div>
@@ -866,24 +990,123 @@
                 loadFleet(); 
             } 
         };
+
+        // --- PULL WEEK REPORT LOGIC ---
+        window.pullWeekReport = () => {
+            const weekStr = prompt("Enter the ISO Week number you want to pull a report for:");
+            if (!weekStr) return;
+            const targetWeek = parseInt(weekStr.trim());
+            if (isNaN(targetWeek) || targetWeek < 1 || targetWeek > 53) {
+                alert("Please enter a valid week number between 1 and 53.");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l');
+
+            doc.setFontSize(16);
+            doc.text(`FTS MAINTENANCE - WEEK ${targetWeek} SCHEDULED TASKS`, 14, 15);
+
+            let finalY = 25;
+
+            // Helper to check if a unit has ANY compliance due in the target week
+            const matchesWeek = (v) => {
+                const datesToCheck = [v.mot_due, v.pmi_due, v.road_tax_due, v.tachograph_service_due, v.brake_test].filter(Boolean);
+                return datesToCheck.some(dateStr => getWeekNumber(new Date(dateStr)) === targetWeek);
+            };
+
+            const matchingVehicles = cachedVehicles.filter(matchesWeek);
+            const matchingTrailers = cachedTrailers.filter(matchesWeek);
+
+            if (matchingVehicles.length === 0 && matchingTrailers.length === 0) {
+                alert(`No vehicles or trailers have tasks scheduled for Week ${targetWeek}.`);
+                return;
+            }
+
+            if (matchingVehicles.length > 0) {
+                matchingVehicles.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
+                doc.setFontSize(12);
+                doc.text("VEHICLES", 14, finalY);
+                doc.autoTable({
+                    startY: finalY + 5,
+                    head: [['Registration', 'MOT Due', 'PMI Week', 'Road Tax', 'Brake Test Week', 'Status']],
+                    body: matchingVehicles.map(v => [
+                        v.registration_number,
+                        v.mot_due ? new Date(v.mot_due).toLocaleDateString('en-GB') : 'N/A',
+                        v.pmi_due ? `Week ${getWeekNumber(v.pmi_due)}` : 'N/A',
+                        v.road_tax_due ? new Date(v.road_tax_due).toLocaleDateString('en-GB') : 'N/A',
+                        v.brake_test ? `Week ${getWeekNumber(v.brake_test)}` : 'N/A',
+                        v.is_vor ? 'VOR' : 'Active'
+                    ]),
+                    headStyles: { fillColor: [225, 29, 72] }
+                });
+                finalY = doc.lastAutoTable.finalY + 15;
+            }
+
+            if (matchingTrailers.length > 0) {
+                matchingTrailers.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
+                if (finalY > 180) { // If getting too close to bottom of page
+                    doc.addPage();
+                    finalY = 20;
+                }
+                doc.setFontSize(12);
+                doc.text("TRAILERS", 14, finalY);
+                doc.autoTable({
+                    startY: finalY + 5,
+                    head: [['Registration', 'MOT Due', 'PMI Week', 'Brake Test Week', 'Status']],
+                    body: matchingTrailers.map(v => [
+                        v.registration_number,
+                        v.mot_due ? new Date(v.mot_due).toLocaleDateString('en-GB') : 'N/A',
+                        v.pmi_due ? `Week ${getWeekNumber(v.pmi_due)}` : 'N/A',
+                        v.brake_test ? `Week ${getWeekNumber(v.brake_test)}` : 'N/A',
+                        v.is_vor ? 'VOR' : 'Active'
+                    ]),
+                    headStyles: { fillColor: [225, 29, 72] }
+                });
+            }
+
+            doc.save(`FTS_Week_${targetWeek}_Report.pdf`);
+        };
         
         window.generatePDF = (reg) => {
             const { jsPDF } = window.jspdf; 
             const doc = new jsPDF();
-            const vData = cachedVehicles.find(v => v.registration_number === reg);
+            
+            const isTrailer = cachedTrailers.some(t => t.registration_number === reg);
+            const vData = isTrailer ? cachedTrailers.find(t => t.registration_number === reg) : cachedVehicles.find(v => v.registration_number === reg);
             const checks = cachedChecks.filter(c => (c.registration || c.trailer_number || '').replace(/\s+/g, '').toUpperCase() === reg.replace(/\s+/g, '').toUpperCase());
+            
             doc.setFontSize(22); 
             doc.text("FTSMaintenance Audit Report", 14, 20);
+            
+            let bodyData = [];
+            if (!isTrailer) {
+                bodyData = [
+                    ['MOT', vData.mot_due ? new Date(vData.mot_due).toLocaleDateString('en-GB') : 'N/A'],
+                    ['PMI', vData.pmi_due ? `Week ${getWeekNumber(vData.pmi_due)}` : 'N/A'],
+                    ['Road Tax', vData.road_tax_due ? new Date(vData.road_tax_due).toLocaleDateString('en-GB') : 'N/A'],
+                    ['Brake Test', vData.brake_test ? `Week ${getWeekNumber(vData.brake_test)}` : 'N/A'],
+                    ['Tacho Cal', vData.tachograph_service_due ? new Date(vData.tachograph_service_due).toLocaleDateString('en-GB') : 'N/A'],
+                    ['Status', vData.is_vor ? 'VOR' : 'Active']
+                ];
+            } else {
+                bodyData = [
+                    ['MOT', vData.mot_due ? new Date(vData.mot_due).toLocaleDateString('en-GB') : 'N/A'],
+                    ['PMI', vData.pmi_due ? `Week ${getWeekNumber(vData.pmi_due)}` : 'N/A'],
+                    ['Status', vData.is_vor ? 'VOR' : 'Active']
+                ];
+            }
+            
             doc.autoTable({ 
                 startY: 30, 
                 head: [['Maintenance Field', 'Current Due / Week']], 
-                body: [['MOT', vData.mot_due || 'N/A'], ['PMI', vData.pmi_due ? `Week ${getWeekNumber(vData.pmi_due)}` : 'N/A'], ['Road Tax', vData.road_tax_due || 'N/A'], ['Brake Test', vData.brake_test ? `Week ${getWeekNumber(vData.brake_test)}` : 'N/A'], ['Status', vData.is_vor ? 'VOR' : 'Active']],
+                body: bodyData,
                 headStyles: { fillColor: [225, 29, 72] }
             });
             doc.autoTable({ 
                 startY: doc.lastAutoTable.finalY + 10, 
                 head: [['Date', 'Condition', 'Notes']], 
-                body: checks.map(r => [new Date(r.created_at).toLocaleDateString(), r.condition_status, r.defect_details || 'N/A']) 
+                body: checks.map(r => [new Date(r.created_at).toLocaleDateString('en-GB'), r.condition_status, r.defect_details || 'N/A']) 
             });
             doc.save(`${reg}_FTS_Report.pdf`);
         };
@@ -891,29 +1114,43 @@
         window.generateFullFleetPDF = () => {
             const { jsPDF } = window.jspdf; 
             const doc = new jsPDF('l');
-            const data = currentTab === 'trailer' ? cachedTrailers : cachedVehicles;
-            doc.text(`${currentTab.toUpperCase()} FLEET COMPLIANCE SUMMARY`, 14, 15);
-            doc.autoTable({ 
-                startY: 25, 
-                head: [['Registration', 'MOT Due', 'PMI Week', 'Status']], 
-                body: data.map(v => [v.registration_number, v.mot_due || 'N/A', v.pmi_due ? `Week ${getWeekNumber(v.pmi_due)}` : 'N/A', v.is_vor ? 'VOR' : 'Active']),
-                headStyles: { fillColor: [225, 29, 72] }
-            });
-            doc.save(`FTS_Fleet_Report.pdf`);
-        };
+            let data = currentTab === 'trailer' ? [...cachedTrailers] : [...cachedVehicles];
+            
+            // Sort Alphabetically
+            data.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
 
-        window.generateReport = (reg, full) => {
-            const reports = cachedChecks.filter(c => (c.registration || c.trailer_number || '').toUpperCase().replace(/\s+/g, '') === reg.toUpperCase().replace(/\s+/g, ''));
-            const panel = document.getElementById('report-panel');
-            panel.innerHTML = `<div class="font-bold text-rose-500 mb-2">${reg} Audit History</div>` + 
-                reports.slice(0, full ? 20 : 3).map(r => `
-                <div class="report-item">
-                    <div class="flex justify-between font-bold text-[11px]">
-                        <span>${new Date(r.created_at).toLocaleDateString()}</span>
-                        <span class="text-rose-400">${r.condition_status}</span>
-                    </div>
-                    <p class="text-slate-400 text-[10px] italic leading-tight mt-1">${r.defect_details || 'No notes'}</p>
-                </div>`).join('');
+            doc.text(`${currentTab.toUpperCase()} FLEET COMPLIANCE SUMMARY`, 14, 15);
+            
+            if (currentTab === 'trailer') {
+                doc.autoTable({ 
+                    startY: 25, 
+                    head: [['Registration', 'MOT Due', 'PMI Week', 'Brake Test Week', 'Status']], 
+                    body: data.map(v => [
+                        v.registration_number, 
+                        v.mot_due ? new Date(v.mot_due).toLocaleDateString('en-GB') : 'N/A', 
+                        v.pmi_due ? `Week ${getWeekNumber(v.pmi_due)}` : 'N/A', 
+                        v.brake_test ? `Week ${getWeekNumber(v.brake_test)}` : 'N/A',
+                        v.is_vor ? 'VOR' : 'Active'
+                    ]),
+                    headStyles: { fillColor: [225, 29, 72] }
+                });
+            } else {
+                doc.autoTable({ 
+                    startY: 25, 
+                    head: [['Registration', 'MOT Due', 'PMI Week', 'Road Tax', 'Brake Test Week', 'Status']], 
+                    body: data.map(v => [
+                        v.registration_number, 
+                        v.mot_due ? new Date(v.mot_due).toLocaleDateString('en-GB') : 'N/A', 
+                        v.pmi_due ? `Week ${getWeekNumber(v.pmi_due)}` : 'N/A', 
+                        v.road_tax_due ? new Date(v.road_tax_due).toLocaleDateString('en-GB') : 'N/A',
+                        v.brake_test ? `Week ${getWeekNumber(v.brake_test)}` : 'N/A',
+                        v.is_vor ? 'VOR' : 'Active'
+                    ]),
+                    headStyles: { fillColor: [225, 29, 72] }
+                });
+            }
+            
+            doc.save(`FTS_Fleet_Report.pdf`);
         };
 
         // --- SMART PARSER ---
@@ -922,7 +1159,7 @@
                 const parts = fileName.split('---');
                 if (parts.length >= 4) {
                     let compType = 'week';
-                    if (parts[2] === 'mot_due' || parts[2] === 'tachograph_service_due') compType = 'date';
+                    if (parts[2] === 'mot_due' || parts[2] === 'tachograph_service_due' || parts[2] === 'road_tax_due') compType = 'date';
                     
                     return { 
                         reg: parts[0].replace(/\s+/g, '').toUpperCase(), 
@@ -930,7 +1167,7 @@
                         folderName: parts[2],
                         dbColumn: parts[2],
                         actualName: parts.slice(3).join('---'), 
-                        isCompliance: (parts[2] === 'pmi_due' || parts[2] === 'brake_test' || parts[2] === 'mot_due' || parts[2] === 'tachograph_service_due'), 
+                        isCompliance: (parts[2] === 'pmi_due' || parts[2] === 'brake_test' || parts[2] === 'mot_due' || parts[2] === 'tachograph_service_due' || parts[2] === 'road_tax_due'), 
                         complianceType: compType
                     };
                 }
@@ -956,6 +1193,10 @@
                         compType = 'date';
                     } else if (rawFolder.toLowerCase() === 'tachographcalibration' || rawFolder.toLowerCase() === 'tachocalibration' || rawFolder.toLowerCase() === 'tachograph_service_due') {
                         dbColumn = 'tachograph_service_due';
+                        isCompliance = true;
+                        compType = 'date';
+                    } else if (rawFolder.toLowerCase() === 'roadtax' || rawFolder.toLowerCase() === 'tax' || rawFolder.toLowerCase() === 'road_tax_due') {
+                        dbColumn = 'road_tax_due';
                         isCompliance = true;
                         compType = 'date';
                     }
