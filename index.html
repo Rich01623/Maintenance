@@ -170,14 +170,9 @@
                 <span id="auth-badge" class="hidden bg-rose-600 text-white text-[10px] px-2 py-0.5 rounded-full font-black animate-pulse shadow-[0_0_10px_rgba(225,29,72,0.6)]">!</span>
             </button>
             <button id="nav-defects" onclick="switchTab('defects')" class="nav-link">DEFECTS</button>
-            
-            <a href="https://rich01623.github.io/standalonemaintenanceschedule/" target="_blank" class="nav-link flex justify-between items-center mt-2">
-                <span>SCHEDULE</span>
-                <svg class="w-4 h-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-            </a>
 
             <!-- UPLOAD DOCUMENTS BUTTON -->
-            <a href="https://rich01623.github.io/JCCPortal/" target="_blank" class="nav-link flex justify-between items-center">
+            <a href="https://rich01623.github.io/JCCPortal/" target="_blank" class="nav-link flex justify-between items-center mt-2">
                 <span>UPLOAD DOCS</span>
                 <svg class="w-4 h-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
             </a>
@@ -273,6 +268,7 @@
         let cachedTrailers = [];
         let activeUploadData = null;
         let currentPath = []; 
+        let currentUserEmail = 'Unknown User'; // Holds current logged in user
 
         // --- AUTH LOGIC ---
         async function handleLogin() {
@@ -291,13 +287,17 @@
                 errorEl.classList.remove('hidden');
                 loginBtn.innerText = "SIGN IN";
             } else {
+                currentUserEmail = email;
                 showApp();
             }
         }
 
         async function checkSession() {
             const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session) showApp();
+            if (session) {
+                currentUserEmail = session.user.email;
+                showApp();
+            }
         }
 
         function showApp() {
@@ -403,6 +403,55 @@
                 ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
             return ISOweekStart;
         }
+
+        // --- RECURRING DATES CALCULATOR ---
+        function getRecurringWY(dStr, intervalWeeks) {
+            if(!dStr) return [];
+            const baseDate = new Date(dStr);
+            if(isNaN(baseDate)) return [];
+            
+            if (intervalWeeks === 0) {
+                let w = getWeekNumber(baseDate);
+                let y = baseDate.getFullYear();
+                if (w === 1 && baseDate.getMonth() === 11) y++;
+                if (w >= 52 && baseDate.getMonth() === 0) y--;
+                return [{ w, y }];
+            }
+
+            const results = [];
+            let currentD = new Date(baseDate);
+            const limitDate = new Date();
+            limitDate.setDate(limitDate.getDate() - (12 * 7)); 
+
+            while (currentD < limitDate) {
+                currentD.setDate(currentD.getDate() + (intervalWeeks * 7));
+            }
+
+            for(let i = 0; i < 10; i++) {
+                const futureD = new Date(currentD);
+                futureD.setDate(futureD.getDate() + (i * intervalWeeks * 7));
+                
+                let w = getWeekNumber(futureD);
+                let y = futureD.getFullYear();
+                if (w === 1 && futureD.getMonth() === 11) y++;
+                if (w >= 52 && futureD.getMonth() === 0) y--;
+                
+                results.push({ w, y });
+            }
+            return results;
+        }
+
+        // --- PDF FOOTER ADDER ---
+        const addFooterToPDF = (doc) => {
+            const pageCount = doc.internal.getNumberOfPages();
+            const timestamp = new Date().toLocaleString('en-GB');
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(128); // Slate color
+                doc.text(`Generated: ${timestamp}  |  User: ${currentUserEmail}`, 14, doc.internal.pageSize.height - 10);
+            }
+        };
 
         const currentWeek = getWeekNumber(new Date());
 
@@ -640,11 +689,15 @@
                             <button onclick="setPlannerView('vehicles')" class="px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${plannerView === 'vehicles' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-500 hover:text-white'}">Vehicles</button>
                             <button onclick="setPlannerView('trailers')" class="px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${plannerView === 'trailers' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-500 hover:text-white'}">Trailers</button>
                         </div>
+                        <button onclick="window.generatePlannerPDF()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest bg-indigo-600 hover:bg-indigo-500 text-white shadow-md transition-all">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            PDF
+                        </button>
                     </div>
                     <div class="flex flex-wrap gap-4 text-[10px] font-bold uppercase tracking-widest bg-slate-800 p-2 px-4 rounded-lg border border-slate-700">
                         <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]"></span> PMI</div>
-                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span> Brake Test</div>
-                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]"></span> MOT</div>
+                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]"></span> Brake Test</div>
+                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span> MOT</div>
                         <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.6)]"></span> Tacho</div>
                     </div>
                 </div>
@@ -660,33 +713,23 @@
                         <tbody>
             `;
 
-            const getWY = (dStr) => {
-                if(!dStr) return null;
-                const d = new Date(dStr);
-                if(isNaN(d)) return null;
-                let w = getWeekNumber(d);
-                let y = d.getFullYear();
-                if (w === 1 && d.getMonth() === 11) y++;
-                if (w >= 52 && d.getMonth() === 0) y--;
-                return { w, y };
-            };
-
             fleet.forEach((v, index) => {
                 const bgClass = index % 2 === 0 ? 'bg-transparent' : 'bg-slate-800/30';
-                const pmi = getWY(v.pmi_due);
-                const brake = getWY(v.brake_test);
-                const mot = getWY(v.mot_due);
-                const tacho = getWY(v.tachograph_service_due);
+                
+                const pmis = getRecurringWY(v.pmi_due, 6);
+                const brakes = getRecurringWY(v.brake_test, 6);
+                const mots = getRecurringWY(v.mot_due, 0);
+                const tachos = getRecurringWY(v.tachograph_service_due, 0);
 
                 html += `<tr class="${bgClass} hover:bg-slate-700/50 transition-colors">`;
                 html += `<td class="p-3 border-r border-b border-slate-700 bg-slate-900 sticky left-0 z-10 font-black text-white uppercase shadow-[2px_0_5px_rgba(0,0,0,0.2)]">${v.registration_number}</td>`;
                 
                 weeks.forEach(wk => {
                     let dots = '';
-                    if(pmi && pmi.w === wk.w && pmi.y === wk.y) dots += `<div class="w-3 h-3 rounded bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.8)]" title="PMI Due"></div>`;
-                    if(plannerView === 'vehicles' && brake && brake.w === wk.w && brake.y === wk.y) dots += `<div class="w-3 h-3 rounded bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.8)]" title="Brake Test Due"></div>`;
-                    if(mot && mot.w === wk.w && mot.y === wk.y) dots += `<div class="w-3 h-3 rounded bg-rose-500 shadow-[0_0_5px_rgba(244,63,94,0.8)]" title="MOT Due"></div>`;
-                    if(plannerView === 'vehicles' && tacho && tacho.w === wk.w && tacho.y === wk.y) dots += `<div class="w-3 h-3 rounded bg-purple-500 shadow-[0_0_5px_rgba(168,85,247,0.8)]" title="Tachograph Due"></div>`;
+                    if(pmis.some(p => p.w === wk.w && p.y === wk.y)) dots += `<div class="w-3 h-3 rounded bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.8)]" title="PMI Due"></div>`;
+                    if(brakes.some(b => b.w === wk.w && b.y === wk.y)) dots += `<div class="w-3 h-3 rounded bg-rose-500 shadow-[0_0_5px_rgba(244,63,94,0.8)]" title="Brake Test Due"></div>`;
+                    if(mots.some(m => m.w === wk.w && m.y === wk.y)) dots += `<div class="w-3 h-3 rounded bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.8)]" title="MOT Due"></div>`;
+                    if(plannerView === 'vehicles' && tachos.some(t => t.w === wk.w && t.y === wk.y)) dots += `<div class="w-3 h-3 rounded bg-purple-500 shadow-[0_0_5px_rgba(168,85,247,0.8)]" title="Tachograph Due"></div>`;
                     
                     html += `<td class="p-1 border-r border-b border-slate-700 text-center h-12 align-middle">
                         <div class="flex flex-wrap justify-center gap-1.5">${dots}</div>
@@ -698,6 +741,92 @@
             html += `</tbody></table></div></div>`;
             grid.innerHTML = html;
         }
+
+        // --- NEW: GENERATE PLANNER PDF ---
+        window.generatePlannerPDF = () => {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'mm', 'a4'); 
+
+            doc.setFontSize(16);
+            doc.text(`FTS 6-MONTH PLANNER - ${plannerView.toUpperCase()}`, 14, 15);
+            
+            // Add Legend
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text("Legend: P = PMI (Blue) | B = Brake Test (Red) | M = MOT (Green) | T = Tacho (Purple) | Multiple = Grey", doc.internal.pageSize.width - 14, 15, { align: 'right' });
+
+            const weeks = [];
+            const today = new Date();
+            for(let i = 0; i < 26; i++) {
+                const d = new Date(today);
+                d.setDate(d.getDate() + (i * 7));
+                let w = getWeekNumber(d);
+                let y = d.getFullYear();
+                if (w === 1 && d.getMonth() === 11) y++;
+                if (w >= 52 && d.getMonth() === 0) y--;
+                weeks.push({ w, y, label: `W${w}` });
+            }
+
+            let fleet = plannerView === 'vehicles' ? [...cachedVehicles] : [...cachedTrailers];
+            fleet.sort((a,b) => a.registration_number.localeCompare(b.registration_number));
+
+            const head = [['Unit ID', ...weeks.map(wk => wk.label)]];
+            const body = [];
+
+            fleet.forEach(v => {
+                const pmis = getRecurringWY(v.pmi_due, 6);
+                const brakes = getRecurringWY(v.brake_test, 6);
+                const mots = getRecurringWY(v.mot_due, 0);
+                const tachos = getRecurringWY(v.tachograph_service_due, 0);
+
+                const row = [v.registration_number];
+                weeks.forEach(wk => {
+                    let tasks = [];
+                    if(pmis.some(p => p.w === wk.w && p.y === wk.y)) tasks.push('P');
+                    if(brakes.some(b => b.w === wk.w && b.y === wk.y)) tasks.push('B');
+                    if(mots.some(m => m.w === wk.w && m.y === wk.y)) tasks.push('M');
+                    if(plannerView === 'vehicles' && tachos.some(t => t.w === wk.w && t.y === wk.y)) tasks.push('T');
+                    
+                    row.push(tasks.join(', '));
+                });
+                body.push(row);
+            });
+
+            doc.autoTable({
+                theme: 'grid',
+                startY: 22,
+                head: head,
+                body: body,
+                headStyles: { fillColor: [225, 29, 72], fontSize: 6, halign: 'center', lineWidth: 0.1, lineColor: [200, 200, 200] },
+                bodyStyles: { fontSize: 6, halign: 'center', lineWidth: 0.1, lineColor: [200, 200, 200] },
+                columnStyles: { 0: { halign: 'left', fontStyle: 'bold', fillColor: [250, 250, 250] } },
+                styles: { cellPadding: 1.5, overflow: 'linebreak' },
+                margin: { left: 10, right: 10 },
+                didParseCell: function(data) {
+                    if (data.section === 'body' && data.column.index > 0) {
+                        const text = data.cell.raw;
+                        if (text) {
+                            data.cell.styles.textColor = [255, 255, 255];
+                            data.cell.styles.fontStyle = 'bold';
+                            if (text.includes(',')) {
+                                data.cell.styles.fillColor = [71, 85, 105]; // Slate for multiple tasks
+                            } else if (text === 'P') {
+                                data.cell.styles.fillColor = [59, 130, 246]; // Blue
+                            } else if (text === 'B') {
+                                data.cell.styles.fillColor = [244, 63, 94]; // Red
+                            } else if (text === 'M') {
+                                data.cell.styles.fillColor = [34, 197, 94]; // Green
+                            } else if (text === 'T') {
+                                data.cell.styles.fillColor = [168, 85, 247]; // Purple
+                            }
+                        }
+                    }
+                }
+            });
+
+            addFooterToPDF(doc);
+            doc.save(`FTS_Planner_${plannerView.toUpperCase()}_${Date.now()}.pdf`);
+        };
 
         function renderFleet() {
             const grid = document.getElementById('fleet-grid'); 
@@ -722,17 +851,43 @@
                 let defectReports = [];
                 
                 if (defectView === 'active') {
-                    defectReports = cachedChecks.filter(c => 
-                        c.condition_status && 
-                        c.condition_status.toLowerCase().includes('defect') && 
-                        !c.condition_status.toLowerCase().includes('nil') &&
-                        !c.condition_status.toLowerCase().includes('resolved')
-                    );
+                    let seenActive = new Set();
+                    let resolvedSet = new Set();
+
+                    cachedChecks.forEach(c => {
+                        const unitID = c.registration || c.trailer_number || 'N/A';
+                        const rawText = c.defect_details || '';
+                        const originalText = rawText.split('--- RESOLVED ---')[0].toLowerCase().replace(/\s+/g, ' ').trim();
+                        const key = `${unitID}::${originalText}`;
+
+                        const isResolved = c.condition_status && c.condition_status.toLowerCase().includes('resolved');
+                        const isDefect = c.condition_status && c.condition_status.toLowerCase().includes('defect') && !c.condition_status.toLowerCase().includes('nil') && !isResolved;
+
+                        if (isResolved) {
+                            resolvedSet.add(key);
+                        } else if (isDefect) {
+                            if (!resolvedSet.has(key) && !seenActive.has(key)) {
+                                seenActive.add(key);
+                                defectReports.push(c);
+                            }
+                        }
+                    });
                 } else {
-                    defectReports = cachedChecks.filter(c => 
-                        c.condition_status && 
-                        c.condition_status.toLowerCase().includes('resolved')
-                    );
+                    let seenHistory = new Set();
+                    cachedChecks.forEach(c => {
+                        const isResolved = c.condition_status && c.condition_status.toLowerCase().includes('resolved');
+                        if (isResolved) {
+                            const unitID = c.registration || c.trailer_number || 'N/A';
+                            const rawText = c.defect_details || '';
+                            const originalText = rawText.split('--- RESOLVED ---')[0].toLowerCase().replace(/\s+/g, ' ').trim();
+                            const key = `${unitID}::${originalText}`;
+
+                            if (!seenHistory.has(key)) {
+                                seenHistory.add(key);
+                                defectReports.push(c);
+                            }
+                        }
+                    });
                 }
 
                 document.getElementById('stat-total').innerText = defectReports.length;
@@ -805,11 +960,18 @@
 
             document.getElementById('stat-total').innerText = data.length;
 
-            if (sortMode === 'alpha') {
-                data.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
-            } else {
-                data.sort((a, b) => getMinDate(a) - getMinDate(b));
-            }
+            data.sort((a, b) => {
+                // VOR logic: push to bottom
+                if (a.is_vor && !b.is_vor) return 1;
+                if (!a.is_vor && b.is_vor) return -1;
+                
+                // Normal sorting
+                if (sortMode === 'alpha') {
+                    return a.registration_number.localeCompare(b.registration_number);
+                } else {
+                    return getMinDate(a) - getMinDate(b);
+                }
+            });
 
             data.forEach(v => {
                 const vReg = v.registration_number.replace(/\s+/g, '').toUpperCase();
@@ -1009,10 +1171,38 @@
 
             let finalY = 25;
 
-            // Helper to check if a unit has ANY compliance due in the target week
+            const matchesRecurringWeek = (dStr, intervalWeeks) => {
+                if (!dStr) return false;
+                const baseDate = new Date(dStr);
+                if(isNaN(baseDate)) return false;
+
+                if (intervalWeeks === 0) {
+                    return getWeekNumber(baseDate) === targetWeek;
+                }
+
+                let currentD = new Date(baseDate);
+                const limitDate = new Date();
+                limitDate.setDate(limitDate.getDate() - (12 * 7)); 
+
+                while (currentD < limitDate) {
+                    currentD.setDate(currentD.getDate() + (intervalWeeks * 7));
+                }
+
+                for(let i = 0; i < 10; i++) {
+                    const futureD = new Date(currentD);
+                    futureD.setDate(futureD.getDate() + (i * intervalWeeks * 7));
+                    if (getWeekNumber(futureD) === targetWeek) return true;
+                }
+                return false;
+            };
+
             const matchesWeek = (v) => {
-                const datesToCheck = [v.mot_due, v.pmi_due, v.road_tax_due, v.tachograph_service_due, v.brake_test].filter(Boolean);
-                return datesToCheck.some(dateStr => getWeekNumber(new Date(dateStr)) === targetWeek);
+                if (matchesRecurringWeek(v.mot_due, 0)) return true;
+                if (matchesRecurringWeek(v.road_tax_due, 0)) return true;
+                if (matchesRecurringWeek(v.tachograph_service_due, 0)) return true;
+                if (matchesRecurringWeek(v.pmi_due, 6)) return true;
+                if (matchesRecurringWeek(v.brake_test, 6)) return true;
+                return false;
             };
 
             const matchingVehicles = cachedVehicles.filter(matchesWeek);
@@ -1029,15 +1219,21 @@
                 doc.text("VEHICLES", 14, finalY);
                 doc.autoTable({
                     startY: finalY + 5,
-                    head: [['Registration', 'MOT Due', 'PMI Week', 'Road Tax', 'Brake Test Week', 'Status']],
-                    body: matchingVehicles.map(v => [
-                        v.registration_number,
-                        v.mot_due ? new Date(v.mot_due).toLocaleDateString('en-GB') : 'N/A',
-                        v.pmi_due ? `Week ${getWeekNumber(v.pmi_due)}` : 'N/A',
-                        v.road_tax_due ? new Date(v.road_tax_due).toLocaleDateString('en-GB') : 'N/A',
-                        v.brake_test ? `Week ${getWeekNumber(v.brake_test)}` : 'N/A',
-                        v.is_vor ? 'VOR' : 'Active'
-                    ]),
+                    head: [['Registration', 'Tasks Due', 'Status']],
+                    body: matchingVehicles.map(v => {
+                        let tasks = [];
+                        if (matchesRecurringWeek(v.mot_due, 0)) tasks.push('MOT');
+                        if (matchesRecurringWeek(v.pmi_due, 6)) tasks.push('PMI');
+                        if (matchesRecurringWeek(v.road_tax_due, 0)) tasks.push('Road Tax');
+                        if (matchesRecurringWeek(v.brake_test, 6)) tasks.push('Brake Test');
+                        if (matchesRecurringWeek(v.tachograph_service_due, 0)) tasks.push('Tacho');
+                        
+                        return [
+                            v.registration_number,
+                            tasks.join(', '),
+                            v.is_vor ? 'VOR' : 'Active'
+                        ];
+                    }),
                     headStyles: { fillColor: [225, 29, 72] }
                 });
                 finalY = doc.lastAutoTable.finalY + 15;
@@ -1045,7 +1241,7 @@
 
             if (matchingTrailers.length > 0) {
                 matchingTrailers.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
-                if (finalY > 180) { // If getting too close to bottom of page
+                if (finalY > 180) { 
                     doc.addPage();
                     finalY = 20;
                 }
@@ -1053,18 +1249,24 @@
                 doc.text("TRAILERS", 14, finalY);
                 doc.autoTable({
                     startY: finalY + 5,
-                    head: [['Registration', 'MOT Due', 'PMI Week', 'Brake Test Week', 'Status']],
-                    body: matchingTrailers.map(v => [
-                        v.registration_number,
-                        v.mot_due ? new Date(v.mot_due).toLocaleDateString('en-GB') : 'N/A',
-                        v.pmi_due ? `Week ${getWeekNumber(v.pmi_due)}` : 'N/A',
-                        v.brake_test ? `Week ${getWeekNumber(v.brake_test)}` : 'N/A',
-                        v.is_vor ? 'VOR' : 'Active'
-                    ]),
+                    head: [['Registration', 'Tasks Due', 'Status']],
+                    body: matchingTrailers.map(v => {
+                        let tasks = [];
+                        if (matchesRecurringWeek(v.mot_due, 0)) tasks.push('MOT');
+                        if (matchesRecurringWeek(v.pmi_due, 6)) tasks.push('PMI');
+                        if (matchesRecurringWeek(v.brake_test, 6)) tasks.push('Brake Test');
+                        
+                        return [
+                            v.registration_number,
+                            tasks.join(', '),
+                            v.is_vor ? 'VOR' : 'Active'
+                        ];
+                    }),
                     headStyles: { fillColor: [225, 29, 72] }
                 });
             }
 
+            addFooterToPDF(doc);
             doc.save(`FTS_Week_${targetWeek}_Report.pdf`);
         };
         
@@ -1108,6 +1310,8 @@
                 head: [['Date', 'Condition', 'Notes']], 
                 body: checks.map(r => [new Date(r.created_at).toLocaleDateString('en-GB'), r.condition_status, r.defect_details || 'N/A']) 
             });
+            
+            addFooterToPDF(doc);
             doc.save(`${reg}_FTS_Report.pdf`);
         };
 
@@ -1150,6 +1354,7 @@
                 });
             }
             
+            addFooterToPDF(doc);
             doc.save(`FTS_Fleet_Report.pdf`);
         };
 
