@@ -170,9 +170,14 @@
                 <span id="auth-badge" class="hidden bg-rose-600 text-white text-[10px] px-2 py-0.5 rounded-full font-black animate-pulse shadow-[0_0_10px_rgba(225,29,72,0.6)]">!</span>
             </button>
             <button id="nav-defects" onclick="switchTab('defects')" class="nav-link">DEFECTS</button>
+            
+            <a href="https://rich01623.github.io/standalonemaintenanceschedule/" target="_blank" class="nav-link flex justify-between items-center mt-2">
+                <span>SCHEDULE</span>
+                <svg class="w-4 h-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+            </a>
 
             <!-- UPLOAD DOCUMENTS BUTTON -->
-            <a href="https://rich01623.github.io/JCCPortal/" target="_blank" class="nav-link flex justify-between items-center mt-2">
+            <a href="https://rich01623.github.io/JCCPortal/" target="_blank" class="nav-link flex justify-between items-center">
                 <span>UPLOAD DOCS</span>
                 <svg class="w-4 h-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
             </a>
@@ -268,7 +273,11 @@
         let cachedTrailers = [];
         let activeUploadData = null;
         let currentPath = []; 
-        let currentUserEmail = 'Unknown User'; // Holds current logged in user
+        let currentUserEmail = 'Unknown User'; 
+
+        // TARGET UNITS FOR LOLER
+        const lolerVehicles = ['FD65VZA', 'HS19VNH'];
+        const lolerTrailers = ['FTSTR30', 'FTSTR31', 'FTSTR32'];
 
         // --- AUTH LOGIC ---
         async function handleLogin() {
@@ -305,7 +314,6 @@
             document.getElementById('main-sidebar').classList.remove('hidden');
             document.getElementById('main-content').classList.remove('hidden');
             loadFleet();
-            // Start silent queue check
             setInterval(checkAuthQueue, 30000);
         }
 
@@ -448,7 +456,7 @@
             for (let i = 1; i <= pageCount; i++) {
                 doc.setPage(i);
                 doc.setFontSize(8);
-                doc.setTextColor(128); // Slate color
+                doc.setTextColor(128); 
                 doc.text(`Generated: ${timestamp}  |  User: ${currentUserEmail}`, 14, doc.internal.pageSize.height - 10);
             }
         };
@@ -742,7 +750,7 @@
             grid.innerHTML = html;
         }
 
-        // --- NEW: GENERATE PLANNER PDF ---
+        // --- GENERATE PLANNER PDF ---
         window.generatePlannerPDF = () => {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('l', 'mm', 'a4'); 
@@ -750,7 +758,6 @@
             doc.setFontSize(16);
             doc.text(`FTS 6-MONTH PLANNER - ${plannerView.toUpperCase()}`, 14, 15);
             
-            // Add Legend
             doc.setFontSize(8);
             doc.setTextColor(100);
             doc.text("Legend: P = PMI (Blue) | B = Brake Test (Red) | M = MOT (Green) | T = Tacho (Purple) | Multiple = Grey", doc.internal.pageSize.width - 14, 15, { align: 'right' });
@@ -809,7 +816,7 @@
                             data.cell.styles.textColor = [255, 255, 255];
                             data.cell.styles.fontStyle = 'bold';
                             if (text.includes(',')) {
-                                data.cell.styles.fillColor = [71, 85, 105]; // Slate for multiple tasks
+                                data.cell.styles.fillColor = [71, 85, 105]; // Slate
                             } else if (text === 'P') {
                                 data.cell.styles.fillColor = [59, 130, 246]; // Blue
                             } else if (text === 'B') {
@@ -983,6 +990,9 @@
                 let isTrailer = cachedTrailers.some(t => t.registration_number === v.registration_number);
                 let table = isTrailer ? 'trailers' : 'vehicles';
                 
+                // LOLER check
+                const requiresLoler = isTrailer ? lolerTrailers.includes(vReg) : lolerVehicles.includes(vReg);
+
                 const pmiWk = getWeekNumber(v.pmi_due);
                 const brakeWk = getWeekNumber(v.brake_test);
                 const isPmiDue = pmiWk !== null && pmiWk <= currentWeek;
@@ -1000,6 +1010,10 @@
                 const roadTaxDateObj = v.road_tax_due ? new Date(v.road_tax_due) : null;
                 const isRoadTaxDue = !roadTaxDateObj || (roadTaxDateObj - new Date()) / 86400000 < 28;
                 const roadTaxDisplay = roadTaxDateObj ? roadTaxDateObj.toLocaleDateString('en-GB') : '--';
+
+                const lolerDateObj = v.loler_due ? new Date(v.loler_due) : null;
+                const isLolerDue = !lolerDateObj || (lolerDateObj - new Date()) / 86400000 < 28;
+                const lolerDisplay = lolerDateObj ? lolerDateObj.toLocaleDateString('en-GB') : '--';
 
                 const card = document.createElement('div');
                 card.className = `glass-card rounded-xl ${v.is_vor ? 'card-vor' : ''}`;
@@ -1024,6 +1038,12 @@
                             <span class="label-heading">Brake Test Week</span>
                             ${isBrakeDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'brake_test', 'vehicles')" class="btn-compliance">Upload Brake</button>` : `<div class="week-display">WEEK ${brakeWk || '--'}</div>`}
                         </div>
+                        ${requiresLoler ? `
+                        <div>
+                            <span class="label-heading">LOLER Due</span>
+                            ${isLolerDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'loler_due', 'vehicles')" class="btn-compliance">Upload LOLER</button>` : `<div class="week-display">${lolerDisplay}</div>`}
+                        </div>
+                        ` : ''}
                     </div>
                     <div class="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-end">
                         <div class="flex-1">
@@ -1040,6 +1060,16 @@
                             <span class="label-heading">PMI Week</span>
                             ${isPmiDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'pmi_due', 'trailers')" class="btn-compliance">Upload PMI</button>` : `<div class="week-display">WEEK ${pmiWk || '--'}</div>`}
                         </div>
+                        <div>
+                            <span class="label-heading">Brake Test Week</span>
+                            ${isBrakeDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'brake_test', 'trailers')" class="btn-compliance">Upload Brake</button>` : `<div class="week-display">WEEK ${brakeWk || '--'}</div>`}
+                        </div>
+                        ${requiresLoler ? `
+                        <div>
+                            <span class="label-heading">LOLER Due</span>
+                            ${isLolerDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'loler_due', 'trailers')" class="btn-compliance">Upload LOLER</button>` : `<div class="week-display">${lolerDisplay}</div>`}
+                        </div>
+                        ` : '<div></div>'}
                     </div>
                     <div class="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-end"><div class="flex-grow"></div>
                 `;
@@ -1112,7 +1142,7 @@
         };
 
         function getMinDate(v) {
-            const d = [v.mot_due, v.pmi_due, v.road_tax_due, v.tachograph_service_due, v.brake_test].filter(Boolean);
+            const d = [v.mot_due, v.pmi_due, v.road_tax_due, v.tachograph_service_due, v.brake_test, v.loler_due].filter(Boolean);
             if (d.length === 0) return new Date('2099-01-01');
             return new Date(Math.min(...d.map(date => new Date(date))));
         }
@@ -1200,6 +1230,7 @@
                 if (matchesRecurringWeek(v.mot_due, 0)) return true;
                 if (matchesRecurringWeek(v.road_tax_due, 0)) return true;
                 if (matchesRecurringWeek(v.tachograph_service_due, 0)) return true;
+                if (matchesRecurringWeek(v.loler_due, 0)) return true;
                 if (matchesRecurringWeek(v.pmi_due, 6)) return true;
                 if (matchesRecurringWeek(v.brake_test, 6)) return true;
                 return false;
@@ -1227,6 +1258,7 @@
                         if (matchesRecurringWeek(v.road_tax_due, 0)) tasks.push('Road Tax');
                         if (matchesRecurringWeek(v.brake_test, 6)) tasks.push('Brake Test');
                         if (matchesRecurringWeek(v.tachograph_service_due, 0)) tasks.push('Tacho');
+                        if (matchesRecurringWeek(v.loler_due, 0)) tasks.push('LOLER');
                         
                         return [
                             v.registration_number,
@@ -1255,6 +1287,7 @@
                         if (matchesRecurringWeek(v.mot_due, 0)) tasks.push('MOT');
                         if (matchesRecurringWeek(v.pmi_due, 6)) tasks.push('PMI');
                         if (matchesRecurringWeek(v.brake_test, 6)) tasks.push('Brake Test');
+                        if (matchesRecurringWeek(v.loler_due, 0)) tasks.push('LOLER');
                         
                         return [
                             v.registration_number,
@@ -1274,10 +1307,13 @@
             const { jsPDF } = window.jspdf; 
             const doc = new jsPDF();
             
+            const vReg = reg.replace(/\s+/g, '').toUpperCase();
             const isTrailer = cachedTrailers.some(t => t.registration_number === reg);
             const vData = isTrailer ? cachedTrailers.find(t => t.registration_number === reg) : cachedVehicles.find(v => v.registration_number === reg);
-            const checks = cachedChecks.filter(c => (c.registration || c.trailer_number || '').replace(/\s+/g, '').toUpperCase() === reg.replace(/\s+/g, '').toUpperCase());
+            const checks = cachedChecks.filter(c => (c.registration || c.trailer_number || '').replace(/\s+/g, '').toUpperCase() === vReg);
             
+            const requiresLoler = isTrailer ? lolerTrailers.includes(vReg) : lolerVehicles.includes(vReg);
+
             doc.setFontSize(22); 
             doc.text("FTSMaintenance Audit Report", 14, 20);
             
@@ -1288,15 +1324,18 @@
                     ['PMI', vData.pmi_due ? `Week ${getWeekNumber(vData.pmi_due)}` : 'N/A'],
                     ['Road Tax', vData.road_tax_due ? new Date(vData.road_tax_due).toLocaleDateString('en-GB') : 'N/A'],
                     ['Brake Test', vData.brake_test ? `Week ${getWeekNumber(vData.brake_test)}` : 'N/A'],
-                    ['Tacho Cal', vData.tachograph_service_due ? new Date(vData.tachograph_service_due).toLocaleDateString('en-GB') : 'N/A'],
-                    ['Status', vData.is_vor ? 'VOR' : 'Active']
+                    ['Tacho Cal', vData.tachograph_service_due ? new Date(vData.tachograph_service_due).toLocaleDateString('en-GB') : 'N/A']
                 ];
+                if (requiresLoler) bodyData.push(['LOLER', vData.loler_due ? new Date(vData.loler_due).toLocaleDateString('en-GB') : 'N/A']);
+                bodyData.push(['Status', vData.is_vor ? 'VOR' : 'Active']);
             } else {
                 bodyData = [
                     ['MOT', vData.mot_due ? new Date(vData.mot_due).toLocaleDateString('en-GB') : 'N/A'],
                     ['PMI', vData.pmi_due ? `Week ${getWeekNumber(vData.pmi_due)}` : 'N/A'],
-                    ['Status', vData.is_vor ? 'VOR' : 'Active']
+                    ['Brake Test', vData.brake_test ? `Week ${getWeekNumber(vData.brake_test)}` : 'N/A']
                 ];
+                if (requiresLoler) bodyData.push(['LOLER', vData.loler_due ? new Date(vData.loler_due).toLocaleDateString('en-GB') : 'N/A']);
+                bodyData.push(['Status', vData.is_vor ? 'VOR' : 'Active']);
             }
             
             doc.autoTable({ 
@@ -1364,7 +1403,7 @@
                 const parts = fileName.split('---');
                 if (parts.length >= 4) {
                     let compType = 'week';
-                    if (parts[2] === 'mot_due' || parts[2] === 'tachograph_service_due' || parts[2] === 'road_tax_due') compType = 'date';
+                    if (parts[2] === 'mot_due' || parts[2] === 'tachograph_service_due' || parts[2] === 'road_tax_due' || parts[2] === 'loler_due') compType = 'date';
                     
                     return { 
                         reg: parts[0].replace(/\s+/g, '').toUpperCase(), 
@@ -1372,7 +1411,7 @@
                         folderName: parts[2],
                         dbColumn: parts[2],
                         actualName: parts.slice(3).join('---'), 
-                        isCompliance: (parts[2] === 'pmi_due' || parts[2] === 'brake_test' || parts[2] === 'mot_due' || parts[2] === 'tachograph_service_due' || parts[2] === 'road_tax_due'), 
+                        isCompliance: (parts[2] === 'pmi_due' || parts[2] === 'brake_test' || parts[2] === 'mot_due' || parts[2] === 'tachograph_service_due' || parts[2] === 'road_tax_due' || parts[2] === 'loler_due'), 
                         complianceType: compType
                     };
                 }
@@ -1402,6 +1441,10 @@
                         compType = 'date';
                     } else if (rawFolder.toLowerCase() === 'roadtax' || rawFolder.toLowerCase() === 'tax' || rawFolder.toLowerCase() === 'road_tax_due') {
                         dbColumn = 'road_tax_due';
+                        isCompliance = true;
+                        compType = 'date';
+                    } else if (rawFolder.toLowerCase() === 'loler' || rawFolder.toLowerCase() === 'lolercertificate' || rawFolder.toLowerCase() === 'loler_due') {
+                        dbColumn = 'loler_due';
                         isCompliance = true;
                         compType = 'date';
                     }
