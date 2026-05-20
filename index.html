@@ -164,20 +164,16 @@
             <button id="nav-vehicle" onclick="switchTab('vehicle')" class="nav-link active">VEHICLES</button>
             <button id="nav-trailer" onclick="switchTab('trailer')" class="nav-link">TRAILERS</button>
             <button id="nav-tyres" onclick="switchTab('tyres')" class="nav-link">TYRES & WHEELS</button>
+            <button id="nav-forklift" onclick="switchTab('forklift')" class="nav-link">FORKLIFTS</button>
             <button id="nav-planner" onclick="switchTab('planner')" class="nav-link">PLANNER</button>
             <button id="nav-jcc" onclick="switchTab('jcc')" class="nav-link flex justify-between items-center">
                 <span>FROST CONNECT</span>
                 <span id="auth-badge" class="hidden bg-rose-600 text-white text-[10px] px-2 py-0.5 rounded-full font-black animate-pulse shadow-[0_0_10px_rgba(225,29,72,0.6)]">!</span>
             </button>
             <button id="nav-defects" onclick="switchTab('defects')" class="nav-link">DEFECTS</button>
-            
-            <a href="https://rich01623.github.io/standalonemaintenanceschedule/" target="_blank" class="nav-link flex justify-between items-center mt-2">
-                <span>SCHEDULE</span>
-                <svg class="w-4 h-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-            </a>
 
             <!-- UPLOAD DOCUMENTS BUTTON -->
-            <a href="https://rich01623.github.io/JCCPortal/" target="_blank" class="nav-link flex justify-between items-center">
+            <a href="https://rich01623.github.io/JCCPortal/" target="_blank" class="nav-link flex justify-between items-center mt-2">
                 <span>UPLOAD DOCS</span>
                 <svg class="w-4 h-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
             </a>
@@ -271,6 +267,7 @@
         let cachedChecks = [];
         let cachedVehicles = [];
         let cachedTrailers = [];
+        let cachedForklifts = [{ registration_number: 'FLT-01' }, { registration_number: 'FLT-02' }];
         let activeUploadData = null;
         let currentPath = []; 
         let currentUserEmail = 'Unknown User'; 
@@ -471,7 +468,7 @@
             document.getElementById('fleet-search').value = "";
             document.getElementById('jcc-search').value = "";
             
-            const tabs = ['vehicle', 'trailer', 'tyres', 'planner', 'jcc', 'defects'];
+            const tabs = ['vehicle', 'trailer', 'tyres', 'forklift', 'planner', 'jcc', 'defects'];
             tabs.forEach(t => {
                 const btn = document.getElementById(`nav-${t}`);
                 if(btn) btn.classList.toggle('active', tab === t);
@@ -538,6 +535,25 @@
                 fleetHeaderLeft.classList.remove('hidden');
                 searchContainer.classList.add('hidden'); 
                 viewTitle.innerText = "TYRES & WHEELS";
+                
+                loadFleet();
+            } else if(tab === 'forklift') {
+                if(addBtn) addBtn.style.display = 'none'; 
+                if(reportBtn) reportBtn.style.display = 'none'; 
+                if(pullWeekBtn) pullWeekBtn.style.display = 'none';
+                if(topSorting) topSorting.style.display = 'none';
+                if(statContainer) statContainer.style.display = 'flex';
+                
+                jccHeaderLeft.classList.add('hidden');
+                jccHeaderLeft.classList.remove('flex');
+                jccSearch.classList.add('hidden');
+                
+                fleetHeaderLeft.classList.remove('hidden');
+                searchContainer.classList.add('hidden'); 
+                viewTitle.innerText = "FORKLIFTS";
+                
+                const statLabel = document.getElementById('stat-label');
+                if(statLabel) statLabel.innerText = "TOTAL UNITS";
                 
                 loadFleet();
             } else {
@@ -758,6 +774,7 @@
             doc.setFontSize(16);
             doc.text(`FTS 6-MONTH PLANNER - ${plannerView.toUpperCase()}`, 14, 15);
             
+            // Add Legend
             doc.setFontSize(8);
             doc.setTextColor(100);
             doc.text("Legend: P = PMI (Blue) | B = Brake Test (Red) | M = MOT (Green) | T = Tacho (Purple) | Multiple = Grey", doc.internal.pageSize.width - 14, 15, { align: 'right' });
@@ -839,17 +856,67 @@
             const grid = document.getElementById('fleet-grid'); 
             grid.innerHTML = '';
             
-            if (currentTab === 'jcc' || currentTab === 'planner' || currentTab === 'tyres') {
-                if (currentTab === 'tyres') {
-                    grid.innerHTML = `
-                        <div class="col-span-full glass-card p-12 text-center border-dashed border-2 border-slate-700 bg-slate-800/20 mt-4">
-                            <div class="inline-flex items-center justify-center p-4 rounded-full bg-slate-800 mb-4">
-                                <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            if (currentTab === 'jcc' || currentTab === 'planner') return;
+            
+            if (currentTab === 'tyres') {
+                grid.innerHTML = `
+                    <div class="col-span-full glass-card p-12 text-center border-dashed border-2 border-slate-700 bg-slate-800/20 mt-4">
+                        <div class="inline-flex items-center justify-center p-4 rounded-full bg-slate-800 mb-4">
+                            <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        </div>
+                        <h3 class="text-xl font-black text-white uppercase tracking-widest mb-2">Module In Development</h3>
+                        <p class="text-slate-500 font-bold text-sm">The Tyres & Wheels management feature is currently being built and will be available in a future update.</p>
+                    </div>`;
+                return;
+            }
+
+            if (currentTab === 'forklift') {
+                const targetFLTs = ['FLT-01', 'FLT-02'];
+                const fltData = cachedVehicles.filter(v => targetFLTs.includes(v.registration_number));
+                
+                const displayFLTs = targetFLTs.map(reg => {
+                    const found = fltData.find(v => v.registration_number === reg);
+                    return found || { registration_number: reg, vin_number: '', is_vor: false, vor_reason: '' };
+                });
+
+                document.getElementById('stat-total').innerText = displayFLTs.length;
+
+                displayFLTs.forEach(v => {
+                    const table = 'vehicles';
+                    const card = document.createElement('div');
+                    card.className = `glass-card rounded-xl ${v.is_vor ? 'card-vor' : ''}`;
+                    card.setAttribute('data-search', `${v.registration_number} ${v.vin_number || ''}`);
+                    
+                    let vorStampHTML = '<div class="vor-stamp">OFF ROAD</div>';
+                    if (v.is_vor) {
+                        vorStampHTML = `
+                            <div class="vor-stamp" style="width: 85%; max-width: 250px; text-align: center;">
+                                <div>OFF ROAD</div>
+                                ${v.vor_reason ? `<div class="text-[11px] font-bold tracking-normal leading-tight mt-2 pt-1 border-t-[3px] border-rose-600 break-words whitespace-normal">${v.vor_reason}</div>` : ''}
                             </div>
-                            <h3 class="text-xl font-black text-white uppercase tracking-widest mb-2">Module In Development</h3>
-                            <p class="text-slate-500 font-bold text-sm">The Tyres & Wheels management feature is currently being built and will be available in a future update.</p>
+                        `;
+                    }
+
+                    card.innerHTML = `
+                        ${vorStampHTML}
+                        <div class="flex justify-between items-center mb-3 relative z-30">
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <div class="plate-badge plate-ok">${v.registration_number}</div>
+                                <button onclick="generatePDF('${v.registration_number}')" class="btn-action btn-pdf">PDF</button>
+                                <button onclick="generateReport('${v.registration_number}', true)" class="btn-action btn-history">History</button>
+                            </div>
+                            <button onclick="toggleVOR_Action('${v.registration_number}', ${v.is_vor || false}, '${table}')" class="btn-action ${v.is_vor ? 'text-rose-500 font-black' : 'text-slate-500'}">${v.is_vor ? '● VOR' : '○ Active'}</button>
+                        </div>
+                        <div class="content-fade">
+                            <div class="mb-3"><span class="label-heading">Serial Number (VIN)</span><input type="text" class="input-text" value="${v.vin_number || ''}" onchange="supabaseClient.from('vehicles').upsert({ registration_number: '${v.registration_number}', vin_number: this.value }).then(()=>loadFleet())"></div>
+                            <div class="grid grid-cols-1 gap-3 mt-4">
+                                <div class="p-4 rounded-xl border border-dashed border-slate-700 bg-slate-800/30 text-center">
+                                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Compliance Fields In Development</p>
+                                </div>
+                            </div>
                         </div>`;
-                }
+                    grid.appendChild(card);
+                });
                 return;
             }
 
@@ -982,6 +1049,10 @@
 
             data.forEach(v => {
                 const vReg = v.registration_number.replace(/\s+/g, '').toUpperCase();
+                
+                // Ensure we don't display FLT-01/FLT-02 inside the normal Vehicle tab
+                if (vReg === 'FLT-01' || vReg === 'FLT-02') return;
+
                 const latestCheck = cachedChecks.find(c => {
                     const checkID = (c.registration || c.trailer_number || '').replace(/\s+/g, '').toUpperCase();
                     return checkID === vReg;
@@ -1105,7 +1176,6 @@
                 grid.appendChild(card);
             });
             
-            // Trigger search filter just in case there's text in the bar
             const searchQuery = document.getElementById('fleet-search').value;
             if (searchQuery) filterGrid(searchQuery);
         }
@@ -1309,9 +1379,12 @@
             
             const vReg = reg.replace(/\s+/g, '').toUpperCase();
             const isTrailer = cachedTrailers.some(t => t.registration_number === reg);
-            const vData = isTrailer ? cachedTrailers.find(t => t.registration_number === reg) : cachedVehicles.find(v => v.registration_number === reg);
-            const checks = cachedChecks.filter(c => (c.registration || c.trailer_number || '').replace(/\s+/g, '').toUpperCase() === vReg);
             
+            // Allow generating a PDF even if the unit is a Forklift not yet saved in Supabase
+            let vData = isTrailer ? cachedTrailers.find(t => t.registration_number === reg) : cachedVehicles.find(v => v.registration_number === reg);
+            if (!vData) vData = { registration_number: reg, mot_due: null, pmi_due: null, road_tax_due: null, brake_test: null, tachograph_service_due: null, loler_due: null, is_vor: false };
+            
+            const checks = cachedChecks.filter(c => (c.registration || c.trailer_number || '').replace(/\s+/g, '').toUpperCase() === vReg);
             const requiresLoler = isTrailer ? lolerTrailers.includes(vReg) : lolerVehicles.includes(vReg);
 
             doc.setFontSize(22); 
