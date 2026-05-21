@@ -172,7 +172,6 @@
             </button>
             <button id="nav-defects" onclick="switchTab('defects')" class="nav-link">DEFECTS</button>
             
-            <!-- UPLOAD DOCUMENTS BUTTON -->
             <a href="https://rich01623.github.io/JCCPortal/" target="_blank" class="nav-link flex justify-between items-center mt-2">
                 <span>UPLOAD DOCS</span>
                 <svg class="w-4 h-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
@@ -195,7 +194,6 @@
     </aside>
 
     <main id="main-content" class="hidden">
-        
         <div id="header-area" class="mb-6 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
             <div id="jcc-header-left" class="hidden flex items-center gap-4">
                 <button id="jcc-back" onclick="navigateUp()" class="hidden bg-slate-800 text-slate-300 px-4 py-2 rounded-lg font-bold text-xs uppercase hover:bg-slate-700">← Back</button>
@@ -252,18 +250,24 @@
         const lolerVehicles = ['FD65VZA', 'HS19VNH', 'HS19YNH'];
         const lolerTrailers = ['FTSTR30', 'FTSTR31', 'FTSTR32'];
 
-        // --- AUTH LOGIC ---
+        // Folder Mapping for Robust Search/Authorise
+        const folderMap = {
+            'pmi_due': 'SafetyInspection', 'safetyinspection': 'SafetyInspection', 'pmi': 'SafetyInspection', 'pmidue': 'SafetyInspection',
+            'brake_test': 'BrakeTest', 'braketest': 'BrakeTest',
+            'mot_due': 'MOTCertificate', 'mot': 'MOTCertificate', 'motcertificate': 'MOTCertificate',
+            'tachograph_service_due': 'TachoCalibration', 'tachocalibration': 'TachoCalibration', 'tachographcalibration': 'TachoCalibration',
+            'road_tax_due': 'RoadTax', 'tax': 'RoadTax', 'roadtax': 'RoadTax',
+            'loler_due': 'LOLERCertificate', 'loler': 'LOLERCertificate', 'lolercertificate': 'LOLERCertificate'
+        };
+
         async function handleLogin() {
             const email = document.getElementById('login-email').value;
             const password = document.getElementById('login-password').value;
             const errorEl = document.getElementById('login-error');
             const loginBtn = document.getElementById('login-btn');
-
             loginBtn.innerText = "AUTHENTICATING...";
             errorEl.classList.add('hidden');
-
             const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-
             if (error) {
                 errorEl.innerText = error.message;
                 errorEl.classList.remove('hidden');
@@ -296,7 +300,6 @@
         }
 
         function toggleMode() { document.documentElement.classList.toggle('light'); document.documentElement.classList.toggle('dark'); }
-        
         async function checkAuthQueue() {
             try {
                 const { data } = await supabaseClient.storage.from('maintenance_docs').list('AUTHORISE', { limit: 100 });
@@ -396,6 +399,8 @@
             return results;
         }
 
+        const currentWeek = getWeekNumber(new Date());
+
         const addFooterToPDF = (doc) => {
             const pageCount = doc.internal.getNumberOfPages();
             const timestamp = new Date().toLocaleString('en-GB');
@@ -403,44 +408,123 @@
                 doc.setPage(i);
                 doc.setFontSize(8);
                 doc.setTextColor(128); 
-                doc.text(`Generated: ${timestamp}  |  User: ${currentUserEmail}`, 14, doc.internal.pageSize.height - 10);
+                doc.text(`Generated: ${timestamp} | ISO Week: ${currentWeek} | User: ${currentUserEmail}`, 14, doc.internal.pageSize.height - 10);
             }
         };
 
-        const currentWeek = getWeekNumber(new Date());
+        // --- FETCH AND VIEW LATEST DOCUMENT ---
+        window.viewLatestDocument = async (reg, fieldKey, tableName) => {
+            try {
+                const cleanReg = reg.replace(/\s+/g, '').toUpperCase();
+                
+                // 1. Check Database
+                const mappedFolder = folderMap[fieldKey.toLowerCase()] || fieldKey;
+                const targetKeys = Object.keys(folderMap).filter(k => folderMap[k] === mappedFolder);
+                if (!targetKeys.includes(fieldKey)) targetKeys.push(fieldKey);
+                
+                const { data, error } = await supabaseClient
+                    .from('maintenance_records')
+                    .select('file_path')
+                    .eq('vehicle_reg', cleanReg)
+                    .in('document_type', targetKeys)
+                    .order('created_at', { ascending: false })
+                    .limit(1);
 
-        // --- DYNAMIC COMPLIANCE UI RENDERER ---
+                if (data && data.length > 0 && data[0].file_path) {
+                    const { data: urlData } = supabaseClient.storage.from('maintenance_docs').getPublicUrl(data[0].file_path);
+                    return openLightbox(urlData.publicUrl);
+                }
+                
+                // 2. Fallback: Deep scan storage bucket for manual/mobile uploads
+                const categoryFolder = tableName ? (tableName.charAt(0).toUpperCase() + tableName.slice(1)) : 'Vehicles'; 
+                const searchPath = `${categoryFolder}/${cleanReg}/${mappedFolder}`;
+                
+                const { data: storageData, error: storageErr } = await supabaseClient.storage.from('maintenance_docs').list(searchPath, {
+                    limit: 10,
+                    sortBy: { column: 'created_at', order: 'desc' }
+                });
+                
+                if (storageData && storageData.length > 0) {
+                    const files = storageData.filter(f => f.name !== '.emptyFolderPlaceholder' && f.id);
+                    if (files.length > 0) {
+                        const latestFile = files[0];
+                        const fullPath = `${searchPath}/${latestFile.name}`;
+                        const { data: urlData } = supabaseClient.storage.from('maintenance_docs').getPublicUrl(fullPath);
+                        return openLightbox(urlData.publicUrl);
+                    }
+                }
+                
+                alert(`No uploaded document found for ${fieldKey.replace('_', ' ').toUpperCase()} on ${cleanReg}. Use the small upload icon next to the field to add one.`);
+            } catch (err) {
+                console.error("Error fetching document:", err);
+                alert("Could not retrieve document. Please check the network.");
+            }
+        };
+
+        // --- NEW: SEND DEFECT FUNCTION ---
+        window.sendDefect = async (id, targetTable) => {
+            const report = cachedChecks.find(c => c.id === id);
+            if (!report) return alert("Error: Report not found");
+            
+            const payload = {
+                submitted_by: currentUserEmail,
+                defect_details: report.defect_details || ''
+            };
+            if (report.registration && report.registration.trim() !== '' && report.registration !== 'N/A') payload.vehicle_reg = report.registration;
+            if (report.trailer_number && report.trailer_number.trim() !== '' && report.trailer_number !== 'N/A') payload.trailer_number = report.trailer_number;
+            
+            try {
+                const { error } = await supabaseClient.from(targetTable).insert([payload]);
+                if (error) throw error;
+                const label = targetTable === 'martyns_maintenance' ? 'Martyn' : 'JCC';
+                alert(`Defect successfully sent to ${label}!`);
+            } catch (err) {
+                alert(`Error sending defect: ${err.message}`);
+            }
+        };
+
         window.getComplianceUI = function(unitReg, dateStr, fieldKey, tableName, isWeekBased, labelName) {
             const shortLabel = labelName || fieldKey.replace('_due', '').replace('_test', '').toUpperCase();
+            let displayStr = 'NO DATA';
+            let bgColor = 'bg-slate-700'; 
+            let textColor = 'text-white';
+            let extraClasses = 'hover:bg-slate-600 transition-colors';
             
-            if (!dateStr) {
-                return `<button onclick="window.triggerUpload('${unitReg}', '${fieldKey}', '${tableName}')" class="week-display bg-slate-700 hover:bg-slate-600 transition-colors cursor-pointer" style="width:100%; border:1px solid var(--border-color); padding:4px 6px; margin-top:2px;">UPLOAD ${shortLabel}</button>`;
-            }
-            
-            const dueD = new Date(dateStr);
-            const today = new Date();
-            
-            const getMonday = (d) => {
-                const date = new Date(d);
-                const day = date.getDay() || 7;
-                if (day !== 1) date.setHours(-24 * (day - 1));
-                date.setHours(0,0,0,0);
-                return date;
-            };
-            
-            const dueMonday = getMonday(dueD);
-            const todayMonday = getMonday(today);
-            const diffWeeks = Math.round((todayMonday - dueMonday) / (1000 * 60 * 60 * 24 * 7));
-            
-            const displayStr = isWeekBased ? `WEEK ${getWeekNumber(dueD)}` : dueD.toLocaleDateString('en-GB');
+            if (dateStr) {
+                const dueD = new Date(dateStr);
+                const today = new Date(); today.setHours(0,0,0,0);
+                const dueD_start = new Date(dueD); dueD_start.setHours(0,0,0,0);
 
-            if (diffWeeks === 0) {
-                return `<button onclick="window.triggerUpload('${unitReg}', '${fieldKey}', '${tableName}')" class="btn-compliance hover:opacity-80" style="background-color: var(--fleet-amber); color: #000; border: none;">${shortLabel} DUE</button>`;
-            } else if (diffWeeks >= 1) {
-                return `<button onclick="window.triggerUpload('${unitReg}', '${fieldKey}', '${tableName}')" class="btn-compliance hover:opacity-80" style="background-color: var(--fleet-red); color: #fff; border: none;">OVERDUE</button>`;
-            } else {
-                return `<button onclick="window.triggerUpload('${unitReg}', '${fieldKey}', '${tableName}')" class="week-display bg-slate-700 hover:bg-slate-600 transition-colors text-white cursor-pointer" style="width:100%; border:1px solid var(--border-color); padding:4px 6px; margin-top:2px;">${displayStr}</button>`;
+                if (isWeekBased) {
+                    const getMonday = (d) => { const date = new Date(d); const day = date.getDay() || 7; if (day !== 1) date.setHours(-24 * (day - 1)); date.setHours(0,0,0,0); return date; };
+                    const dueMonday = getMonday(dueD); const todayMonday = getMonday(today);
+                    const diffWeeks = Math.round((dueMonday - todayMonday) / (1000 * 60 * 60 * 24 * 7));
+                    displayStr = `WEEK ${getWeekNumber(dueD)}`;
+                    if (diffWeeks === 0) { bgColor = 'bg-amber-500'; textColor = 'text-black'; extraClasses = 'hover:opacity-80 font-black'; displayStr = `${shortLabel} DUE`; } 
+                    else if (diffWeeks < 0) { bgColor = 'bg-rose-600'; textColor = 'text-white'; extraClasses = 'hover:opacity-80 font-black'; displayStr = `OVERDUE`; }
+                } else {
+                    const diffDays = Math.ceil((dueD_start - today) / (1000 * 60 * 60 * 24));
+                    if (fieldKey === 'mot_due') {
+                        const mm = String(dueD.getMonth() + 1).padStart(2, '0'); const yy = String(dueD.getFullYear()).slice(2);
+                        displayStr = `${mm}/${yy}`;
+                        if (diffDays <= 28 && diffDays >= 0) { bgColor = 'bg-amber-500'; textColor = 'text-black'; extraClasses = 'hover:opacity-80 font-black'; }
+                        else if (diffDays < 0) { bgColor = 'bg-rose-600'; textColor = 'text-white'; extraClasses = 'hover:opacity-80 font-black'; }
+                    } else {
+                        displayStr = dueD.toLocaleDateString('en-GB');
+                        if (fieldKey === 'loler_due' || fieldKey === 'road_tax_due') {
+                            if (diffDays <= 30 && diffDays >= 0) { bgColor = 'bg-amber-500'; textColor = 'text-black'; extraClasses = 'hover:opacity-80 font-black'; }
+                            else if (diffDays < 0) { bgColor = 'bg-rose-600'; textColor = 'text-white'; extraClasses = 'hover:opacity-80 font-black'; }
+                        } else {
+                            if (diffDays <= 28 && diffDays >= 0) { bgColor = 'bg-amber-500'; textColor = 'text-black'; extraClasses = 'hover:opacity-80 font-black'; }
+                            else if (diffDays < 0) { bgColor = 'bg-rose-600'; textColor = 'text-white'; extraClasses = 'hover:opacity-80 font-black'; }
+                        }
+                    }
+                }
             }
+            return `<div class="flex w-full mt-0.5 rounded border border-slate-600 overflow-hidden shadow-sm h-7">
+                <button onclick="window.viewLatestDocument('${unitReg}', '${fieldKey}', '${tableName}')" class="flex-grow text-center text-[0.80rem] font-bold ${bgColor} ${textColor} ${extraClasses}">${displayStr}</button>
+                <button onclick="window.triggerUpload('${unitReg}', '${fieldKey}', '${tableName}')" class="w-8 flex items-center justify-center bg-slate-800 hover:bg-slate-600 border-l border-slate-600 shrink-0"><svg class="w-3 h-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg></button>
+            </div>`;
         };
 
         function switchTab(tab) { 
@@ -545,34 +629,52 @@
                 const checkAutoVOR = (unit, tableName) => {
                     const fields = ['mot_due', 'pmi_due', 'road_tax_due', 'brake_test', 'tachograph_service_due', 'loler_due'];
                     let needsVor = false;
+                    let vorReason = "";
+                    const today = new Date();
+                    today.setHours(0,0,0,0);
+
                     for (const field of fields) {
                         if (unit[field]) {
                             const dueD = new Date(unit[field]);
+                            dueD.setHours(0,0,0,0);
                             if (!isNaN(dueD)) {
-                                const getMonday = (d) => {
-                                    const date = new Date(d);
-                                    const day = date.getDay() || 7;
-                                    if (day !== 1) date.setHours(-24 * (day - 1));
-                                    date.setHours(0,0,0,0);
-                                    return date;
-                                };
-                                const diffWeeks = Math.round((getMonday(new Date()) - getMonday(dueD)) / (1000 * 60 * 60 * 24 * 7));
-                                if (diffWeeks >= 2) {
-                                    needsVor = true;
-                                    break;
+                                if (field === 'loler_due' || field === 'road_tax_due') {
+                                    const diffDays = Math.ceil((today - dueD) / (1000 * 60 * 60 * 24));
+                                    if (diffDays >= 7) {
+                                        needsVor = true;
+                                        vorReason = `AUTO-VOR: ${field.replace('_due','').toUpperCase()} Overdue (7+ Days)`;
+                                        break;
+                                    }
+                                } else {
+                                    const getMonday = (d) => {
+                                        const date = new Date(d);
+                                        const day = date.getDay() || 7;
+                                        if (day !== 1) date.setHours(-24 * (day - 1));
+                                        date.setHours(0,0,0,0);
+                                        return date;
+                                    };
+                                    const dueMonday = getMonday(dueD);
+                                    const todayMonday = getMonday(today);
+                                    const diffWeeks = Math.round((todayMonday - dueMonday) / (1000 * 60 * 60 * 24 * 7));
+                                    if (diffWeeks >= 2) {
+                                        needsVor = true;
+                                        vorReason = `AUTO-VOR: Compliance Document Overdue (2+ Weeks)`;
+                                        break;
+                                    }
                                 }
                             }
                         }
                     }
                     if (needsVor && !unit.is_vor) {
                         unit.is_vor = true;
-                        unit.vor_reason = "AUTO-VOR: Compliance Document Overdue (2+ Weeks)";
+                        unit.vor_reason = vorReason;
                         supabaseClient.from(tableName).update({ 
                             is_vor: true, 
-                            vor_reason: "AUTO-VOR: Compliance Document Overdue (2+ Weeks)" 
+                            vor_reason: vorReason 
                         }).eq('registration_number', unit.registration_number).then();
                     }
                 };
+                
                 cachedVehicles.forEach(v => checkAutoVOR(v, 'vehicles'));
                 cachedTrailers.forEach(v => checkAutoVOR(v, 'trailers'));
 
@@ -594,17 +696,20 @@
             renderCalendar();
         }
 
-        async function resolveDefect(id, currentNotes, originTable) {
+        window.resolveDefect = async (id) => {
+            const report = cachedChecks.find(c => c.id === id);
+            if (!report) return alert("Error: Report not found");
+
             const who = prompt("Enter your name:");
             if (!who) return;
             const action = prompt("What action was taken?");
             if (!action) return;
             
             const timestamp = new Date().toLocaleString('en-GB');
-            const newNotes = `${currentNotes || ''}\n\n--- RESOLVED ---\nBy: ${who}\nDate: ${timestamp}\nAction: ${action}`;
+            const newNotes = `${report.defect_details || ''}\n\n--- RESOLVED ---\nBy: ${who}\nDate: ${timestamp}\nAction: ${action}`;
             
             const { error } = await supabaseClient
-                .from(originTable)
+                .from(report._origin)
                 .update({ 
                     condition_status: 'Resolved - Nil Defect',
                     defect_details: newNotes
@@ -613,7 +718,7 @@
 
             if (error) alert("Error: " + error.message);
             else loadFleet();
-        }
+        };
 
         function closeHistoryModal() {
             document.getElementById('history-modal').classList.add('hidden');
@@ -632,7 +737,7 @@
                 panel.innerHTML = reports.map(r => {
                     const isResolved = r.condition_status && r.condition_status.toLowerCase().includes('resolved');
                     const statusColor = isResolved ? 'text-green-500' : 'text-rose-400';
-                    const notesText = r.notes ? `<br><span class="text-amber-500 font-bold">Driver Note: ${r.notes}</span>` : '';
+                    const notesText = r.notes ? `<br><span class="text-amber-500 font-bold mt-1 inline-block">Driver Note: ${r.notes}</span>` : '';
                     
                     return `
                     <div class="bg-slate-800/50 p-5 rounded-xl border border-slate-700 shadow-sm hover:shadow-md transition-shadow">
@@ -735,7 +840,6 @@
             grid.innerHTML = html;
         }
 
-        // --- GENERATE PLANNER PDF ---
         window.generatePlannerPDF = () => {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('l', 'mm', 'a4'); 
@@ -984,7 +1088,11 @@
                             <td class="text-slate-300 italic text-xs" style="max-width:300px; white-space: pre-wrap;">${detailsDisplay}</td>
                             <td style="text-align:right">
                                 ${defectView === 'active' ? 
-                                    `<button onclick="resolveDefect('${report.id}', \`${report.defect_details || ''}\`, '${report._origin}')" class="btn-action bg-green-600 text-white border-none">Mark Resolved</button>` : 
+                                    `<div class="flex flex-col gap-1 w-full max-w-[120px] ml-auto">
+                                        <button onclick="resolveDefect('${report.id}')" class="btn-action bg-green-600 hover:bg-green-500 text-white border-none w-full text-center">Mark Resolved</button>
+                                        <button onclick="sendDefect('${report.id}', 'martyns_maintenance')" class="btn-action bg-blue-600 hover:bg-blue-500 text-white border-none w-full text-center">Send to Martyn</button>
+                                        <button onclick="sendDefect('${report.id}', 'jcc_bookings')" class="btn-action bg-purple-600 hover:bg-purple-500 text-white border-none w-full text-center">Book into JCC</button>
+                                    </div>` : 
                                     `<span class="text-[9px] font-black text-green-500 uppercase">Resolved</span>`
                                 }
                             </td>
@@ -1035,7 +1143,7 @@
                 card.setAttribute('data-search', `${v.registration_number} ${v.vin_number || ''}`);
                 
                 let vehicleSpecifics = !isTrailer ? `
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="grid grid-cols-2 gap-x-3 gap-y-2">
                         <div>
                             <span class="label-heading">MOT Due</span>
                             ${window.getComplianceUI(v.registration_number, v.mot_due, 'mot_due', table, false, 'MOT')}
@@ -1053,20 +1161,20 @@
                             ${window.getComplianceUI(v.registration_number, v.brake_test, 'brake_test', table, true, 'BRAKE')}
                         </div>
                     </div>
-                    <div class="mt-3 pt-3 border-t border-slate-700/50 flex gap-3 items-end">
-                        <div class="flex-1">
+                    <div class="grid grid-cols-2 gap-x-3 gap-y-2 mt-2 pt-2 border-t border-slate-700/50">
+                        <div>
                             <span class="label-heading">Tachograph Calibration</span>
                             ${window.getComplianceUI(v.registration_number, v.tachograph_service_due, 'tachograph_service_due', table, false, 'TACHO')}
                         </div>
                         ${requiresLoler ? `
-                        <div class="flex-1">
+                        <div>
                             <span class="label-heading">LOLER Due</span>
                             ${window.getComplianceUI(v.registration_number, v.loler_due, 'loler_due', table, false, 'LOLER')}
                         </div>
-                        ` : '<div class="flex-1"></div>'}
+                        ` : '<div></div>'}
                     </div>
                 ` : `
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="grid grid-cols-2 gap-x-3 gap-y-2">
                         <div>
                             <span class="label-heading">MOT Due</span>
                             ${window.getComplianceUI(v.registration_number, v.mot_due, 'mot_due', table, false, 'MOT')}
@@ -1075,20 +1183,18 @@
                             <span class="label-heading">PMI Week</span>
                             ${window.getComplianceUI(v.registration_number, v.pmi_due, 'pmi_due', table, true, 'PMI')}
                         </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-x-3 gap-y-2 mt-2 pt-2 border-t border-slate-700/50">
                         <div>
                             <span class="label-heading">Brake Test Week</span>
                             ${window.getComplianceUI(v.registration_number, v.brake_test, 'brake_test', table, true, 'BRAKE')}
                         </div>
-                        <div></div>
-                    </div>
-                    <div class="mt-3 pt-3 border-t border-slate-700/50 flex gap-3 items-end">
                         ${requiresLoler ? `
-                        <div class="flex-1">
+                        <div>
                             <span class="label-heading">LOLER Due</span>
                             ${window.getComplianceUI(v.registration_number, v.loler_due, 'loler_due', table, false, 'LOLER')}
                         </div>
-                        ` : '<div class="flex-1"></div>'}
-                        <div class="flex-1"></div>
+                        ` : '<div></div>'}
                     </div>
                 `;
 
@@ -1116,7 +1222,7 @@
                     <div class="content-fade">
                         <div class="mb-3"><span class="label-heading">VIN Number</span><input type="text" class="input-text" value="${v.vin_number || ''}" onchange="window.save('${v.registration_number}', 'vin_number', this.value, '${table}')"></div>
                         ${vehicleSpecifics}
-                        <button onclick="window.removeUnit('${v.registration_number}', '${table}')" class="text-slate-600 hover:text-rose-500 transition-colors mb-1">
+                        <button onclick="window.removeUnit('${v.registration_number}', '${table}')" class="text-slate-600 hover:text-rose-500 transition-colors mt-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                     </div></div>`;
@@ -1132,7 +1238,6 @@
             document.getElementById('compliance-upload-hidden').click();
         };
 
-        // --- CONSOLIDATED UPLOAD INTERCEPTOR ---
         document.getElementById('compliance-upload-hidden').onchange = async (e) => {
             const file = e.target.files[0];
             if (!file || !activeUploadData) return;
@@ -1209,6 +1314,8 @@
                 alert("Please enter a valid week number between 1 and 53.");
                 return;
             }
+            
+            const sortPref = prompt("Sort PDF report by:\n1 - Registration (A-Z)\n2 - Earliest Due Date", "1");
 
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('l');
@@ -1260,12 +1367,17 @@
             const matchingTrailers = cachedTrailers.filter(matchesWeek);
 
             if (matchingVehicles.length === 0 && matchingTrailers.length === 0) {
-                alert(`No vehicles or trailers have tasks scheduled for Week ${targetWeek}.`);
+                alert(`No vehicles or trailers have tasks scheduled for Week ${targetWeek} of ${targetY}.`);
                 return;
             }
 
             if (matchingVehicles.length > 0) {
-                matchingVehicles.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
+                if (sortPref === "2") {
+                    matchingVehicles.sort((a, b) => getMinDate(a) - getMinDate(b));
+                } else {
+                    matchingVehicles.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
+                }
+                
                 doc.setFontSize(12);
                 doc.text("VEHICLES", 14, finalY);
                 doc.autoTable({
@@ -1292,7 +1404,12 @@
             }
 
             if (matchingTrailers.length > 0) {
-                matchingTrailers.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
+                if (sortPref === "2") {
+                    matchingTrailers.sort((a, b) => getMinDate(a) - getMinDate(b));
+                } else {
+                    matchingTrailers.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
+                }
+                
                 if (finalY > 180) { 
                     doc.addPage();
                     finalY = 20;
@@ -1381,12 +1498,18 @@
         };
 
         window.generateFullFleetPDF = () => {
+            const sortPref = prompt("Sort PDF report by:\n1 - Registration (A-Z)\n2 - Earliest Due Date", "1");
             const { jsPDF } = window.jspdf; 
             const doc = new jsPDF('l');
             let data = currentTab === 'trailer' ? [...cachedTrailers] : [...cachedVehicles];
             
             data = data.filter(v => v.registration_number !== 'FLT-01' && v.registration_number !== 'FLT-02');
-            data.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
+            
+            if (sortPref === "2") {
+                data.sort((a, b) => getMinDate(a) - getMinDate(b));
+            } else {
+                data.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
+            }
 
             doc.text(`${currentTab.toUpperCase()} FLEET COMPLIANCE SUMMARY`, 14, 15);
             
@@ -1428,16 +1551,33 @@
             if (fileName.includes('---')) {
                 const parts = fileName.split('---');
                 if (parts.length >= 4) {
+                    const rawFolder = parts[2].toLowerCase().trim();
+                    let dbColumn = rawFolder;
+                    let standardFolder = parts[2]; // fallback
+                    let isCompliance = false;
                     let compType = 'week';
-                    if (parts[2] === 'mot_due' || parts[2] === 'tachograph_service_due' || parts[2] === 'road_tax_due' || parts[2] === 'loler_due') compType = 'date';
-                    
+
+                    if (['safetyinspection', 'pmidue', 'pmi', 'pmi_due'].includes(rawFolder)) {
+                        dbColumn = 'pmi_due'; standardFolder = 'SafetyInspection'; isCompliance = true;
+                    } else if (['braketest', 'brake_test'].includes(rawFolder)) {
+                        dbColumn = 'brake_test'; standardFolder = 'BrakeTest'; isCompliance = true;
+                    } else if (['motcertificate', 'motdue', 'mot', 'mot_due'].includes(rawFolder)) {
+                        dbColumn = 'mot_due'; standardFolder = 'MOTCertificate'; isCompliance = true; compType = 'date';
+                    } else if (['tachographcalibration', 'tachocalibration', 'tachograph_service_due'].includes(rawFolder)) {
+                        dbColumn = 'tachograph_service_due'; standardFolder = 'TachoCalibration'; isCompliance = true; compType = 'date';
+                    } else if (['roadtax', 'tax', 'road_tax_due', 'roadtax'].includes(rawFolder)) {
+                        dbColumn = 'road_tax_due'; standardFolder = 'RoadTax'; isCompliance = true; compType = 'date';
+                    } else if (['loler', 'lolercertificate', 'loler_due'].includes(rawFolder)) {
+                        dbColumn = 'loler_due'; standardFolder = 'LOLERCertificate'; isCompliance = true; compType = 'date';
+                    }
+
                     return { 
                         reg: parts[0].replace(/\s+/g, '').toUpperCase(), 
                         table: parts[1].toLowerCase().trim(), 
-                        folderName: parts[2],
-                        dbColumn: parts[2],
+                        folderName: standardFolder,
+                        dbColumn: dbColumn,
                         actualName: parts.slice(3).join('---'), 
-                        isCompliance: (parts[2] === 'pmi_due' || parts[2] === 'brake_test' || parts[2] === 'mot_due' || parts[2] === 'tachograph_service_due' || parts[2] === 'road_tax_due' || parts[2] === 'loler_due'), 
+                        isCompliance: isCompliance, 
                         complianceType: compType
                     };
                 }
@@ -1446,39 +1586,30 @@
             if (fileName.includes('_')) {
                 const parts = fileName.split('_');
                 if (parts.length >= 3) {
-                    const rawFolder = parts[2].trim();
+                    const rawFolder = parts[2].toLowerCase().trim();
                     let dbColumn = rawFolder;
+                    let standardFolder = parts[2]; // fallback
                     let isCompliance = false;
                     let compType = 'week';
 
-                    if (rawFolder.toLowerCase() === 'safetyinspection' || rawFolder.toLowerCase() === 'pmidue' || rawFolder.toLowerCase() === 'pmi') {
-                        dbColumn = 'pmi_due';
-                        isCompliance = true;
-                    } else if (rawFolder.toLowerCase() === 'braketest') {
-                        dbColumn = 'brake_test';
-                        isCompliance = true;
-                    } else if (rawFolder.toLowerCase() === 'motcertificate' || rawFolder.toLowerCase() === 'motdue' || rawFolder.toLowerCase() === 'mot') {
-                        dbColumn = 'mot_due';
-                        isCompliance = true;
-                        compType = 'date';
-                    } else if (rawFolder.toLowerCase() === 'tachographcalibration' || rawFolder.toLowerCase() === 'tachocalibration' || rawFolder.toLowerCase() === 'tachograph_service_due') {
-                        dbColumn = 'tachograph_service_due';
-                        isCompliance = true;
-                        compType = 'date';
-                    } else if (rawFolder.toLowerCase() === 'roadtax' || rawFolder.toLowerCase() === 'tax' || rawFolder.toLowerCase() === 'road_tax_due') {
-                        dbColumn = 'road_tax_due';
-                        isCompliance = true;
-                        compType = 'date';
-                    } else if (rawFolder.toLowerCase() === 'loler' || rawFolder.toLowerCase() === 'lolercertificate' || rawFolder.toLowerCase() === 'loler_due') {
-                        dbColumn = 'loler_due';
-                        isCompliance = true;
-                        compType = 'date';
+                    if (['safetyinspection', 'pmidue', 'pmi', 'pmi_due'].includes(rawFolder)) {
+                        dbColumn = 'pmi_due'; standardFolder = 'SafetyInspection'; isCompliance = true;
+                    } else if (['braketest', 'brake_test'].includes(rawFolder)) {
+                        dbColumn = 'brake_test'; standardFolder = 'BrakeTest'; isCompliance = true;
+                    } else if (['motcertificate', 'motdue', 'mot', 'mot_due'].includes(rawFolder)) {
+                        dbColumn = 'mot_due'; standardFolder = 'MOTCertificate'; isCompliance = true; compType = 'date';
+                    } else if (['tachographcalibration', 'tachocalibration', 'tachograph_service_due'].includes(rawFolder)) {
+                        dbColumn = 'tachograph_service_due'; standardFolder = 'TachoCalibration'; isCompliance = true; compType = 'date';
+                    } else if (['roadtax', 'tax', 'road_tax_due', 'roadtax'].includes(rawFolder)) {
+                        dbColumn = 'road_tax_due'; standardFolder = 'RoadTax'; isCompliance = true; compType = 'date';
+                    } else if (['loler', 'lolercertificate', 'loler_due'].includes(rawFolder)) {
+                        dbColumn = 'loler_due'; standardFolder = 'LOLERCertificate'; isCompliance = true; compType = 'date';
                     }
 
                     return { 
                         reg: parts[1].replace(/\s+/g, '').toUpperCase(), 
                         table: parts[0].toLowerCase().trim(), 
-                        folderName: rawFolder, 
+                        folderName: standardFolder, 
                         dbColumn: dbColumn, 
                         actualName: fileName, 
                         isCompliance: isCompliance,
@@ -1796,7 +1927,6 @@
                 }
             }).join('');
             
-            // Trigger search filter just in case
             const searchQuery = document.getElementById('jcc-search').value;
             if (searchQuery) filterGrid(searchQuery);
         }
