@@ -194,6 +194,7 @@
     </aside>
 
     <main id="main-content" class="hidden">
+        
         <div id="header-area" class="mb-6 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
             <div id="jcc-header-left" class="hidden flex items-center gap-4">
                 <button id="jcc-back" onclick="navigateUp()" class="hidden bg-slate-800 text-slate-300 px-4 py-2 rounded-lg font-bold text-xs uppercase hover:bg-slate-700">← Back</button>
@@ -461,9 +462,9 @@
             }
         };
 
-        // --- NEW: SEND DEFECT FUNCTION ---
+        // --- SEND DEFECT FUNCTION ---
         window.sendDefect = async (id, targetTable) => {
-            const report = cachedChecks.find(c => c.id === id);
+            const report = cachedChecks.find(c => String(c.id) === String(id));
             if (!report) return alert("Error: Report not found");
             
             const payload = {
@@ -473,6 +474,10 @@
             if (report.registration && report.registration.trim() !== '' && report.registration !== 'N/A') payload.vehicle_reg = report.registration;
             if (report.trailer_number && report.trailer_number.trim() !== '' && report.trailer_number !== 'N/A') payload.trailer_number = report.trailer_number;
             
+            if (targetTable === 'jcc_bookings') {
+                payload.inspection_type = 'DEFECT';
+            }
+
             try {
                 const { error } = await supabaseClient.from(targetTable).insert([payload]);
                 if (error) throw error;
@@ -480,6 +485,30 @@
                 alert(`Defect successfully sent to ${label}!`);
             } catch (err) {
                 alert(`Error sending defect: ${err.message}`);
+            }
+        };
+
+        // --- MARK VOR FROM DEFECT ---
+        window.markVorFromDefect = async (reg, trailerNum) => {
+            const unitId = (reg && reg !== 'N/A') ? reg : trailerNum;
+            const tableName = (trailerNum && trailerNum !== 'N/A') ? 'trailers' : 'vehicles';
+            
+            if (!unitId) return alert("Error: Could not identify unit.");
+            
+            const reason = prompt(`Please enter the reason for placing ${unitId} VOR:`, "VOR flagged via Defect");
+            if (reason === null) return;
+
+            try {
+                const { error } = await supabaseClient.from(tableName).update({ 
+                    is_vor: true,
+                    vor_reason: reason 
+                }).eq('registration_number', unitId);
+                
+                if (error) throw error;
+                alert(`${unitId} has been marked as VOR.`);
+                loadFleet();
+            } catch (err) {
+                alert(`Error marking VOR: ${err.message}`);
             }
         };
 
@@ -504,20 +533,21 @@
                     else if (diffWeeks < 0) { bgColor = 'bg-rose-600'; textColor = 'text-white'; extraClasses = 'hover:opacity-80 font-black'; displayStr = `OVERDUE`; }
                 } else {
                     const diffDays = Math.ceil((dueD_start - today) / (1000 * 60 * 60 * 24));
-                    if (fieldKey === 'mot_due') {
-                        const mm = String(dueD.getMonth() + 1).padStart(2, '0'); const yy = String(dueD.getFullYear()).slice(2);
-                        displayStr = `${mm}/${yy}`;
-                        if (diffDays <= 28 && diffDays >= 0) { bgColor = 'bg-amber-500'; textColor = 'text-black'; extraClasses = 'hover:opacity-80 font-black'; }
-                        else if (diffDays < 0) { bgColor = 'bg-rose-600'; textColor = 'text-white'; extraClasses = 'hover:opacity-80 font-black'; }
+                    
+                    if (fieldKey === 'mot_due' || fieldKey === 'road_tax_due') {
+                        const shortMonth = dueD.toLocaleString('en-GB', { month: 'short' });
+                        const yy = String(dueD.getFullYear()).slice(2);
+                        displayStr = `${shortMonth} ${yy}`;
                     } else {
                         displayStr = dueD.toLocaleDateString('en-GB');
-                        if (fieldKey === 'loler_due' || fieldKey === 'road_tax_due') {
-                            if (diffDays <= 30 && diffDays >= 0) { bgColor = 'bg-amber-500'; textColor = 'text-black'; extraClasses = 'hover:opacity-80 font-black'; }
-                            else if (diffDays < 0) { bgColor = 'bg-rose-600'; textColor = 'text-white'; extraClasses = 'hover:opacity-80 font-black'; }
-                        } else {
-                            if (diffDays <= 28 && diffDays >= 0) { bgColor = 'bg-amber-500'; textColor = 'text-black'; extraClasses = 'hover:opacity-80 font-black'; }
-                            else if (diffDays < 0) { bgColor = 'bg-rose-600'; textColor = 'text-white'; extraClasses = 'hover:opacity-80 font-black'; }
-                        }
+                    }
+
+                    if (fieldKey === 'loler_due' || fieldKey === 'road_tax_due') {
+                        if (diffDays <= 30 && diffDays >= 0) { bgColor = 'bg-amber-500'; textColor = 'text-black'; extraClasses = 'hover:opacity-80 font-black'; }
+                        else if (diffDays < 0) { bgColor = 'bg-rose-600'; textColor = 'text-white'; extraClasses = 'hover:opacity-80 font-black'; }
+                    } else {
+                        if (diffDays <= 28 && diffDays >= 0) { bgColor = 'bg-amber-500'; textColor = 'text-black'; extraClasses = 'hover:opacity-80 font-black'; }
+                        else if (diffDays < 0) { bgColor = 'bg-rose-600'; textColor = 'text-white'; extraClasses = 'hover:opacity-80 font-black'; }
                     }
                 }
             }
@@ -697,7 +727,7 @@
         }
 
         window.resolveDefect = async (id) => {
-            const report = cachedChecks.find(c => c.id === id);
+            const report = cachedChecks.find(c => String(c.id) === String(id));
             if (!report) return alert("Error: Report not found");
 
             const who = prompt("Enter your name:");
@@ -714,7 +744,7 @@
                     condition_status: 'Resolved - Nil Defect',
                     defect_details: newNotes
                 })
-                .eq('id', id);
+                .eq('id', report.id);
 
             if (error) alert("Error: " + error.message);
             else loadFleet();
@@ -757,7 +787,6 @@
             document.getElementById('history-modal').classList.remove('hidden');
         };
 
-        // --- 6 MONTH PLANNER RENDERER ---
         function renderCalendar() {
             const grid = document.getElementById('fleet-grid'); 
             grid.innerHTML = '';
@@ -993,7 +1022,6 @@
                 return;
             }
 
-            // --- DEFECTS TAB LOGIC ---
             if (currentTab === 'defects') {
                 let defectReports = [];
                 
@@ -1079,6 +1107,9 @@
                     const unitID = report.registration || report.trailer_number || 'N/A'; 
                     const notesText = report.notes ? `\n\nDriver Note: ${report.notes}` : '';
                     const detailsDisplay = `${report.defect_details || 'No details'}${notesText}`;
+                    
+                    const regArg = report.registration || '';
+                    const trailArg = report.trailer_number || '';
 
                     tableHTML += `
                         <tr class="defect-row" data-search="${unitID} ${report.driver_name} ${detailsDisplay}">
@@ -1092,6 +1123,7 @@
                                         <button onclick="resolveDefect('${report.id}')" class="btn-action bg-green-600 hover:bg-green-500 text-white border-none w-full text-center">Mark Resolved</button>
                                         <button onclick="sendDefect('${report.id}', 'martyns_maintenance')" class="btn-action bg-blue-600 hover:bg-blue-500 text-white border-none w-full text-center">Send to Martyn</button>
                                         <button onclick="sendDefect('${report.id}', 'jcc_bookings')" class="btn-action bg-purple-600 hover:bg-purple-500 text-white border-none w-full text-center">Book into JCC</button>
+                                        <button onclick="markVorFromDefect('${regArg}', '${trailArg}')" class="btn-action bg-red-600 hover:bg-red-500 text-white border-none w-full text-center">Mark VOR</button>
                                     </div>` : 
                                     `<span class="text-[9px] font-black text-green-500 uppercase">Resolved</span>`
                                 }
@@ -1106,7 +1138,6 @@
                 return;
             }
 
-            // --- STANDARD VEHICLE/TRAILER TAB LOGIC ---
             let data = [];
             if(currentTab === 'vehicle') data = [...cachedVehicles];
             else if(currentTab === 'trailer') data = [...cachedTrailers];
@@ -1314,8 +1345,6 @@
                 alert("Please enter a valid week number between 1 and 53.");
                 return;
             }
-            
-            const sortPref = prompt("Sort PDF report by:\n1 - Registration (A-Z)\n2 - Earliest Due Date", "1");
 
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('l');
@@ -1372,11 +1401,7 @@
             }
 
             if (matchingVehicles.length > 0) {
-                if (sortPref === "2") {
-                    matchingVehicles.sort((a, b) => getMinDate(a) - getMinDate(b));
-                } else {
-                    matchingVehicles.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
-                }
+                matchingVehicles.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
                 
                 doc.setFontSize(12);
                 doc.text("VEHICLES", 14, finalY);
@@ -1404,11 +1429,7 @@
             }
 
             if (matchingTrailers.length > 0) {
-                if (sortPref === "2") {
-                    matchingTrailers.sort((a, b) => getMinDate(a) - getMinDate(b));
-                } else {
-                    matchingTrailers.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
-                }
+                matchingTrailers.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
                 
                 if (finalY > 180) { 
                     doc.addPage();
@@ -1966,9 +1987,19 @@
             const pmiWk = getWeekNumber(v.pmi_due);
             if (pmiWk && pmiWk <= currentWeek) return 'plate-critical';
             if (!v.mot_due) return 'plate-ok';
-            const motDiff = (new Date(v.mot_due) - new Date()) / 86400000;
-            if (motDiff < 7) return 'plate-critical';
+            
+            const motDate = new Date(v.mot_due);
+            const today = new Date();
+            
+            const motDiff = (motDate - today) / 86400000;
+            if (motDiff < 0) return 'plate-critical';
+            
+            if (motDate.getMonth() === today.getMonth() && motDate.getFullYear() === today.getFullYear()) {
+                return 'plate-critical';
+            }
+            
             if (motDiff < 14) return 'plate-warn';
+            
             return 'plate-ok';
         }
 
