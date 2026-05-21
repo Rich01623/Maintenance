@@ -31,7 +31,7 @@
         .btn-action { font-size: 10px; font-weight: 800; text-transform: uppercase; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); transition: all 0.3s ease; position: relative; z-index: 20; }
         .btn-history { background: rgba(51, 65, 85, 0.5); color: #cbd5e1; }
         .btn-pdf { background: #0ea5e9; color: white; border-color: #0ea5e9; }
-        .btn-compliance { background: var(--fleet-red); color: white; width: 100%; font-size: 10px; font-weight: 900; padding: 6px; border-radius: 4px; margin-top: 2px; text-transform: uppercase; border: none; cursor: pointer; }
+        .btn-compliance { width: 100%; font-size: 10px; font-weight: 900; padding: 6px; border-radius: 4px; margin-top: 2px; text-transform: uppercase; border: none; cursor: pointer; transition: opacity 0.2s; }
         .label-heading { font-size: 10px; color: #94a3b8; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; display: block; letter-spacing: 0.025em; }
         input[type="date"], .input-text, .login-input { background: rgba(0,0,0,0.1); border-radius: 4px; padding: 4px 6px; border: 1px solid var(--border-color); color: inherit; font-size: 0.9rem; font-weight: 600; width: 100%; outline: none; }
         .login-input { padding: 0.75rem 1rem; margin-bottom: 1rem; background: #0f172a; border-radius: 0.75rem; }
@@ -171,7 +171,7 @@
                 <span id="auth-badge" class="hidden bg-rose-600 text-white text-[10px] px-2 py-0.5 rounded-full font-black animate-pulse shadow-[0_0_10px_rgba(225,29,72,0.6)]">!</span>
             </button>
             <button id="nav-defects" onclick="switchTab('defects')" class="nav-link">DEFECTS</button>
-
+            
             <!-- UPLOAD DOCUMENTS BUTTON -->
             <a href="https://rich01623.github.io/JCCPortal/" target="_blank" class="nav-link flex justify-between items-center mt-2">
                 <span>UPLOAD DOCS</span>
@@ -179,9 +179,7 @@
             </a>
         </nav>
 
-        <div class="flex-grow flex flex-col min-h-0 pt-2 border-t border-slate-700">
-            <!-- Audit Trail Removed per request, freeing up space -->
-        </div>
+        <div class="flex-grow flex flex-col min-h-0 pt-2 border-t border-slate-700"></div>
 
         <div class="pt-3 mt-3">
             <div class="bg-slate-800/40 p-2 px-3 rounded-lg mb-2 flex justify-between items-center" id="stat-container">
@@ -189,9 +187,7 @@
                 <span id="stat-total" class="text-lg font-black">--</span>
             </div>
             
-            <!-- PULL WEEK REPORT BUTTON -->
             <button id="btn-pull-week" onclick="window.pullWeekReport()" class="w-full bg-slate-700 text-white py-2.5 rounded-xl text-[11px] font-black hover:bg-slate-600 transition-all uppercase mb-1.5">Pull Week Report</button>
-            
             <button id="btn-fleet-report" onclick="generateFullFleetPDF()" class="w-full bg-slate-700 text-white py-2.5 rounded-xl text-[11px] font-black hover:bg-slate-600 transition-all uppercase mb-1.5">Generate Fleet Report</button>
             <button id="add-unit-btn" onclick="window.addNewUnit()" class="w-full bg-rose-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-rose-500 transition-all uppercase mb-1.5">+ Add Unit</button>
             <button onclick="handleLogout()" class="w-full text-slate-500 py-1.5 text-[10px] font-black uppercase hover:text-rose-500 transition-colors">Sign Out</button>
@@ -200,53 +196,33 @@
 
     <main id="main-content" class="hidden">
         
-        <!-- Live Fleet Search & Global Top Controls Header -->
         <div id="header-area" class="mb-6 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
-            
-            <!-- JCC Header Left side (Breadcrumbs) -->
             <div id="jcc-header-left" class="hidden flex items-center gap-4">
                 <button id="jcc-back" onclick="navigateUp()" class="hidden bg-slate-800 text-slate-300 px-4 py-2 rounded-lg font-bold text-xs uppercase hover:bg-slate-700">← Back</button>
                 <div id="breadcrumb-container" class="flex items-center gap-2 text-sm font-black uppercase text-slate-400">
                     <span>Frost Docs</span>
                 </div>
             </div>
-            
-            <!-- Fleet Header Left side (Title) -->
             <div id="fleet-header-left" class="flex-grow">
                 <h2 id="view-title" class="text-2xl font-black uppercase text-white tracking-widest hidden md:block">VEHICLES</h2>
             </div>
-            
-            <!-- Right side global controls -->
             <div class="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end ml-auto">
-                
-                <!-- Sorting Toggle -->
                 <div id="top-sorting" class="flex bg-slate-800 p-1 rounded-lg border border-slate-700 h-10 items-center">
                     <button id="sort-alpha" onclick="setSort('alpha')" class="px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest transition-all bg-rose-600 text-white shadow-md">A-Z</button>
                     <button id="sort-date" onclick="setSort('date')" class="px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest transition-all text-slate-500 hover:text-white">DUE</button>
                 </div>
-                
-                <!-- ISO Calculator -->
                 <button onclick="openIsoWeekModal()" class="flex items-center justify-center bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 h-10 rounded-lg transition-colors" title="ISO Week Calculator">
                     <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                     <span class="ml-2 text-[10px] font-black uppercase tracking-widest hidden lg:block">ISO Calc</span>
                 </button>
-                
-                <!-- Day/Night Toggle -->
-                <button onclick="toggleMode()" class="flex items-center justify-center bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 h-10 rounded-lg transition-colors text-lg" title="Toggle Day/Night">
-                    ◐
-                </button>
-
-                <!-- JCC Search Bar -->
+                <button onclick="toggleMode()" class="flex items-center justify-center bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 h-10 rounded-lg transition-colors text-lg" title="Toggle Day/Night">◐</button>
                 <input type="text" id="jcc-search" oninput="filterGrid(this.value)" placeholder="Search files..." class="hidden bg-slate-800 border border-slate-700 px-4 h-10 rounded-xl text-sm font-bold text-white outline-none focus:border-rose-600 transition-colors shadow-lg w-full sm:w-64">
-
-                <!-- Fleet Search Bar -->
                 <div class="relative w-full sm:w-64" id="search-container">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                     </div>
                     <input type="text" id="fleet-search" oninput="filterGrid(this.value)" placeholder="Search Fleet Reg, Driver, or VIN..." class="pl-10 w-full h-10 bg-slate-800 border border-slate-700 px-4 rounded-xl text-sm font-bold text-white outline-none focus:border-rose-600 transition-colors shadow-lg">
                 </div>
-                
             </div>
         </div>
 
@@ -273,7 +249,7 @@
         let currentUserEmail = 'Unknown User'; 
 
         // TARGET UNITS FOR LOLER
-        const lolerVehicles = ['FD65VZA', 'HS19VNH'];
+        const lolerVehicles = ['FD65VZA', 'HS19VNH', 'HS19YNH'];
         const lolerTrailers = ['FTSTR30', 'FTSTR31', 'FTSTR32'];
 
         // --- AUTH LOGIC ---
@@ -319,29 +295,19 @@
             window.location.reload();
         }
 
-        function toggleMode() { 
-            document.documentElement.classList.toggle('light'); 
-            document.documentElement.classList.toggle('dark'); 
-        }
-
-        // --- NOTIFICATION QUEUE LOGIC ---
+        function toggleMode() { document.documentElement.classList.toggle('light'); document.documentElement.classList.toggle('dark'); }
+        
         async function checkAuthQueue() {
             try {
                 const { data } = await supabaseClient.storage.from('maintenance_docs').list('AUTHORISE', { limit: 100 });
                 if (data) {
                     const count = data.filter(f => f.name !== '.emptyFolderPlaceholder').length;
                     const badge = document.getElementById('auth-badge');
-                    if (count > 0) {
-                        badge.innerText = count;
-                        badge.classList.remove('hidden');
-                    } else {
-                        badge.classList.add('hidden');
-                    }
+                    if (count > 0) { badge.innerText = count; badge.classList.remove('hidden'); } else { badge.classList.add('hidden'); }
                 }
             } catch(e) {}
         }
 
-        // --- LIGHTBOX LOGIC ---
         function openLightbox(url) {
             document.getElementById('lightbox-modal').classList.remove('hidden');
             document.getElementById('lightbox-loader').classList.remove('hidden');
@@ -353,7 +319,6 @@
             document.getElementById('lightbox-frame').src = '';
         }
 
-        // --- LIVE SEARCH LOGIC ---
         function filterGrid(query) {
             const lowerQuery = query.toLowerCase();
             const cards = document.querySelectorAll('#fleet-grid > div');
@@ -367,7 +332,6 @@
             });
         }
 
-        // --- ISO WEEK CALCULATOR UI FUNCTIONS ---
         function openIsoWeekModal() {
             document.getElementById('iso-week-modal').classList.remove('hidden');
             document.getElementById('iso-calc-input').valueAsDate = new Date();
@@ -380,10 +344,7 @@
 
         function calculateIsoWeek() {
             const dateVal = document.getElementById('iso-calc-input').value;
-            if (!dateVal) {
-                document.getElementById('iso-calc-result').innerText = "--";
-                return;
-            }
+            if (!dateVal) { document.getElementById('iso-calc-result').innerText = "--"; return; }
             const week = getWeekNumber(new Date(dateVal));
             document.getElementById('iso-calc-result').innerText = `Week ${week}`;
         }
@@ -402,19 +363,15 @@
             const simple = new Date(year, 0, 1 + (week - 1) * 7, 12, 0, 0);
             const dow = simple.getDay();
             const ISOweekStart = simple;
-            if (dow <= 4)
-                ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
-            else
-                ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+            if (dow <= 4) ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+            else ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
             return ISOweekStart;
         }
 
-        // --- RECURRING DATES CALCULATOR ---
         function getRecurringWY(dStr, intervalWeeks) {
             if(!dStr) return [];
             const baseDate = new Date(dStr);
             if(isNaN(baseDate)) return [];
-            
             if (intervalWeeks === 0) {
                 let w = getWeekNumber(baseDate);
                 let y = baseDate.getFullYear();
@@ -422,31 +379,23 @@
                 if (w >= 52 && baseDate.getMonth() === 0) y--;
                 return [{ w, y }];
             }
-
             const results = [];
             let currentD = new Date(baseDate);
             const limitDate = new Date();
             limitDate.setDate(limitDate.getDate() - (12 * 7)); 
-
-            while (currentD < limitDate) {
-                currentD.setDate(currentD.getDate() + (intervalWeeks * 7));
-            }
-
+            while (currentD < limitDate) currentD.setDate(currentD.getDate() + (intervalWeeks * 7));
             for(let i = 0; i < 10; i++) {
                 const futureD = new Date(currentD);
                 futureD.setDate(futureD.getDate() + (i * intervalWeeks * 7));
-                
                 let w = getWeekNumber(futureD);
                 let y = futureD.getFullYear();
                 if (w === 1 && futureD.getMonth() === 11) y++;
                 if (w >= 52 && futureD.getMonth() === 0) y--;
-                
                 results.push({ w, y });
             }
             return results;
         }
 
-        // --- PDF FOOTER ADDER ---
         const addFooterToPDF = (doc) => {
             const pageCount = doc.internal.getNumberOfPages();
             const timestamp = new Date().toLocaleString('en-GB');
@@ -460,11 +409,43 @@
 
         const currentWeek = getWeekNumber(new Date());
 
+        // --- DYNAMIC COMPLIANCE UI RENDERER ---
+        window.getComplianceUI = function(unitReg, dateStr, fieldKey, tableName, isWeekBased, labelName) {
+            const shortLabel = labelName || fieldKey.replace('_due', '').replace('_test', '').toUpperCase();
+            
+            if (!dateStr) {
+                return `<button onclick="window.triggerUpload('${unitReg}', '${fieldKey}', '${tableName}')" class="week-display bg-slate-700 hover:bg-slate-600 transition-colors cursor-pointer" style="width:100%; border:1px solid var(--border-color); padding:4px 6px; margin-top:2px;">UPLOAD ${shortLabel}</button>`;
+            }
+            
+            const dueD = new Date(dateStr);
+            const today = new Date();
+            
+            const getMonday = (d) => {
+                const date = new Date(d);
+                const day = date.getDay() || 7;
+                if (day !== 1) date.setHours(-24 * (day - 1));
+                date.setHours(0,0,0,0);
+                return date;
+            };
+            
+            const dueMonday = getMonday(dueD);
+            const todayMonday = getMonday(today);
+            const diffWeeks = Math.round((todayMonday - dueMonday) / (1000 * 60 * 60 * 24 * 7));
+            
+            const displayStr = isWeekBased ? `WEEK ${getWeekNumber(dueD)}` : dueD.toLocaleDateString('en-GB');
+
+            if (diffWeeks === 0) {
+                return `<button onclick="window.triggerUpload('${unitReg}', '${fieldKey}', '${tableName}')" class="btn-compliance hover:opacity-80" style="background-color: var(--fleet-amber); color: #000; border: none;">${shortLabel} DUE</button>`;
+            } else if (diffWeeks >= 1) {
+                return `<button onclick="window.triggerUpload('${unitReg}', '${fieldKey}', '${tableName}')" class="btn-compliance hover:opacity-80" style="background-color: var(--fleet-red); color: #fff; border: none;">OVERDUE</button>`;
+            } else {
+                return `<button onclick="window.triggerUpload('${unitReg}', '${fieldKey}', '${tableName}')" class="week-display bg-slate-700 hover:bg-slate-600 transition-colors text-white cursor-pointer" style="width:100%; border:1px solid var(--border-color); padding:4px 6px; margin-top:2px;">${displayStr}</button>`;
+            }
+        };
+
         function switchTab(tab) { 
             currentTab = tab; 
             localStorage.setItem('fts_current_tab', tab);
-            
-            // Clear searches
             document.getElementById('fleet-search').value = "";
             document.getElementById('jcc-search').value = "";
             
@@ -479,8 +460,6 @@
             const pullWeekBtn = document.getElementById('btn-pull-week');
             const topSorting = document.getElementById('top-sorting');
             const statContainer = document.getElementById('stat-container');
-            
-            // Header parts
             const jccHeaderLeft = document.getElementById('jcc-header-left');
             const jccSearch = document.getElementById('jcc-search');
             const fleetHeaderLeft = document.getElementById('fleet-header-left');
@@ -493,33 +472,18 @@
                 if(pullWeekBtn) pullWeekBtn.style.display = 'none';
                 if(topSorting) topSorting.style.display = 'none';
                 if(statContainer) statContainer.style.display = 'none';
-                
-                fleetHeaderLeft.classList.add('hidden');
-                searchContainer.classList.add('hidden');
-                
-                jccHeaderLeft.classList.remove('hidden'); 
-                jccHeaderLeft.classList.add('flex');
-                jccSearch.classList.remove('hidden');
-                currentPath = [];
-                loadJCCFiles();
+                fleetHeaderLeft.classList.add('hidden'); searchContainer.classList.add('hidden');
+                jccHeaderLeft.classList.remove('hidden'); jccHeaderLeft.classList.add('flex'); jccSearch.classList.remove('hidden');
+                currentPath = []; loadJCCFiles();
             } else if(tab === 'planner') {
                 if(addBtn) addBtn.style.display = 'none'; 
                 if(reportBtn) reportBtn.style.display = 'none'; 
                 if(pullWeekBtn) pullWeekBtn.style.display = 'none';
                 if(topSorting) topSorting.style.display = 'none';
                 if(statContainer) statContainer.style.display = 'flex';
-                
-                jccHeaderLeft.classList.add('hidden');
-                jccHeaderLeft.classList.remove('flex');
-                jccSearch.classList.add('hidden');
-                
-                fleetHeaderLeft.classList.remove('hidden');
-                searchContainer.classList.add('hidden'); 
-                viewTitle.innerText = "PLANNER";
-                
-                const statLabel = document.getElementById('stat-label');
-                if(statLabel) statLabel.innerText = "TOTAL UNITS";
-                
+                jccHeaderLeft.classList.add('hidden'); jccHeaderLeft.classList.remove('flex'); jccSearch.classList.add('hidden');
+                fleetHeaderLeft.classList.remove('hidden'); searchContainer.classList.add('hidden'); viewTitle.innerText = "PLANNER";
+                const statLabel = document.getElementById('stat-label'); if(statLabel) statLabel.innerText = "TOTAL UNITS";
                 loadFleet();
             } else if(tab === 'tyres') {
                 if(addBtn) addBtn.style.display = 'none'; 
@@ -527,15 +491,8 @@
                 if(pullWeekBtn) pullWeekBtn.style.display = 'none';
                 if(topSorting) topSorting.style.display = 'none';
                 if(statContainer) statContainer.style.display = 'none';
-                
-                jccHeaderLeft.classList.add('hidden');
-                jccHeaderLeft.classList.remove('flex');
-                jccSearch.classList.add('hidden');
-                
-                fleetHeaderLeft.classList.remove('hidden');
-                searchContainer.classList.add('hidden'); 
-                viewTitle.innerText = "TYRES & WHEELS";
-                
+                jccHeaderLeft.classList.add('hidden'); jccHeaderLeft.classList.remove('flex'); jccSearch.classList.add('hidden');
+                fleetHeaderLeft.classList.remove('hidden'); searchContainer.classList.add('hidden'); viewTitle.innerText = "TYRES & WHEELS";
                 loadFleet();
             } else if(tab === 'forklift') {
                 if(addBtn) addBtn.style.display = 'none'; 
@@ -543,18 +500,9 @@
                 if(pullWeekBtn) pullWeekBtn.style.display = 'none';
                 if(topSorting) topSorting.style.display = 'none';
                 if(statContainer) statContainer.style.display = 'flex';
-                
-                jccHeaderLeft.classList.add('hidden');
-                jccHeaderLeft.classList.remove('flex');
-                jccSearch.classList.add('hidden');
-                
-                fleetHeaderLeft.classList.remove('hidden');
-                searchContainer.classList.add('hidden'); 
-                viewTitle.innerText = "FORKLIFTS";
-                
-                const statLabel = document.getElementById('stat-label');
-                if(statLabel) statLabel.innerText = "TOTAL UNITS";
-                
+                jccHeaderLeft.classList.add('hidden'); jccHeaderLeft.classList.remove('flex'); jccSearch.classList.add('hidden');
+                fleetHeaderLeft.classList.remove('hidden'); searchContainer.classList.add('hidden'); viewTitle.innerText = "FORKLIFTS";
+                const statLabel = document.getElementById('stat-label'); if(statLabel) statLabel.innerText = "TOTAL UNITS";
                 loadFleet();
             } else {
                 if(addBtn) addBtn.style.display = (tab === 'defects') ? 'none' : 'block';
@@ -562,18 +510,9 @@
                 if(pullWeekBtn) pullWeekBtn.style.display = (tab === 'defects') ? 'none' : 'block';
                 if(topSorting) topSorting.style.display = (tab === 'defects') ? 'none' : 'flex'; 
                 if(statContainer) statContainer.style.display = 'flex';
-                
-                jccHeaderLeft.classList.add('hidden');
-                jccHeaderLeft.classList.remove('flex');
-                jccSearch.classList.add('hidden');
-                
-                fleetHeaderLeft.classList.remove('hidden');
-                searchContainer.classList.remove('hidden');
-                viewTitle.innerText = tab.toUpperCase();
-                
-                const statLabel = document.getElementById('stat-label');
-                if(statLabel) statLabel.innerText = (tab === 'defects') ? "DEFECTS FOUND" : "TOTAL UNITS";
-                
+                jccHeaderLeft.classList.add('hidden'); jccHeaderLeft.classList.remove('flex'); jccSearch.classList.add('hidden');
+                fleetHeaderLeft.classList.remove('hidden'); searchContainer.classList.remove('hidden'); viewTitle.innerText = tab.toUpperCase();
+                const statLabel = document.getElementById('stat-label'); if(statLabel) statLabel.innerText = (tab === 'defects') ? "DEFECTS FOUND" : "TOTAL UNITS";
                 loadFleet(); 
             }
         }
@@ -587,15 +526,14 @@
 
         async function loadFleet() {
             try {
-                // Background check queue
                 checkAuthQueue();
-
                 const [vResponse, tResponse, cResponse, tcResponse] = await Promise.all([
                     supabaseClient.from('vehicles').select('*'),
                     supabaseClient.from('trailers').select('*'),
                     supabaseClient.from('daily_vehicle_checks').select('*').order('created_at', { ascending: false }),
                     supabaseClient.from('daily_trailer_checks').select('*').order('created_at', { ascending: false })
                 ]);
+                
                 cachedVehicles = vResponse.data || [];
                 cachedTrailers = tResponse.data || [];
                 
@@ -603,6 +541,41 @@
                 const tChecks = (tcResponse.data || []).map(item => ({ ...item, _origin: 'daily_trailer_checks' }));
                 cachedChecks = [...vChecks, ...tChecks].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
                 
+                // --- AUTO VOR LOGIC ---
+                const checkAutoVOR = (unit, tableName) => {
+                    const fields = ['mot_due', 'pmi_due', 'road_tax_due', 'brake_test', 'tachograph_service_due', 'loler_due'];
+                    let needsVor = false;
+                    for (const field of fields) {
+                        if (unit[field]) {
+                            const dueD = new Date(unit[field]);
+                            if (!isNaN(dueD)) {
+                                const getMonday = (d) => {
+                                    const date = new Date(d);
+                                    const day = date.getDay() || 7;
+                                    if (day !== 1) date.setHours(-24 * (day - 1));
+                                    date.setHours(0,0,0,0);
+                                    return date;
+                                };
+                                const diffWeeks = Math.round((getMonday(new Date()) - getMonday(dueD)) / (1000 * 60 * 60 * 24 * 7));
+                                if (diffWeeks >= 2) {
+                                    needsVor = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (needsVor && !unit.is_vor) {
+                        unit.is_vor = true;
+                        unit.vor_reason = "AUTO-VOR: Compliance Document Overdue (2+ Weeks)";
+                        supabaseClient.from(tableName).update({ 
+                            is_vor: true, 
+                            vor_reason: "AUTO-VOR: Compliance Document Overdue (2+ Weeks)" 
+                        }).eq('registration_number', unit.registration_number).then();
+                    }
+                };
+                cachedVehicles.forEach(v => checkAutoVOR(v, 'vehicles'));
+                cachedTrailers.forEach(v => checkAutoVOR(v, 'trailers'));
+
                 if (currentTab === 'planner') {
                     renderCalendar();
                 } else if (currentTab !== 'jcc') {
@@ -642,7 +615,6 @@
             else loadFleet();
         }
 
-        // --- HISTORY MODAL LOGIC ---
         function closeHistoryModal() {
             document.getElementById('history-modal').classList.add('hidden');
         }
@@ -660,6 +632,7 @@
                 panel.innerHTML = reports.map(r => {
                     const isResolved = r.condition_status && r.condition_status.toLowerCase().includes('resolved');
                     const statusColor = isResolved ? 'text-green-500' : 'text-rose-400';
+                    const notesText = r.notes ? `<br><span class="text-amber-500 font-bold">Driver Note: ${r.notes}</span>` : '';
                     
                     return `
                     <div class="bg-slate-800/50 p-5 rounded-xl border border-slate-700 shadow-sm hover:shadow-md transition-shadow">
@@ -671,7 +644,7 @@
                             <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Reported By:</span>
                             <span class="text-xs font-bold text-slate-200">${r.driver_name || 'System'}</span>
                         </div>
-                        <p class="text-slate-300 text-sm italic leading-relaxed border-l-2 border-slate-600 pl-4 py-1">${r.defect_details || 'No additional notes provided.'}</p>
+                        <p class="text-slate-300 text-sm italic leading-relaxed border-l-2 border-slate-600 pl-4 py-1">${r.defect_details || 'No additional notes provided.'}${notesText}</p>
                     </div>`;
                 }).join('');
             }
@@ -684,27 +657,23 @@
             const grid = document.getElementById('fleet-grid'); 
             grid.innerHTML = '';
             
-            // 1. Generate Next 26 Weeks (6 Months)
             const weeks = [];
             const today = new Date();
             for(let i = 0; i < 26; i++) {
                 const d = new Date(today);
                 d.setDate(d.getDate() + (i * 7));
-                
                 let w = getWeekNumber(d);
                 let y = d.getFullYear();
                 if (w === 1 && d.getMonth() === 11) y++;
                 if (w >= 52 && d.getMonth() === 0) y--;
-                
                 weeks.push({ w, y });
             }
 
-            // 2. Combine and Sort Fleet based on view toggle
             let fleet = plannerView === 'vehicles' ? [...cachedVehicles] : [...cachedTrailers];
+            fleet = fleet.filter(v => v.registration_number !== 'FLT-01' && v.registration_number !== 'FLT-02');
             fleet.sort((a,b) => a.registration_number.localeCompare(b.registration_number));
             document.getElementById('stat-total').innerText = fleet.length;
 
-            // 3. Build HTML
             let html = `
             <div class="col-span-full glass-card overflow-hidden flex flex-col" style="padding:0 !important; height: calc(100vh - 180px);">
                 <div class="p-4 md:p-6 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 flex-wrap gap-4">
@@ -774,7 +743,6 @@
             doc.setFontSize(16);
             doc.text(`FTS 6-MONTH PLANNER - ${plannerView.toUpperCase()}`, 14, 15);
             
-            // Add Legend
             doc.setFontSize(8);
             doc.setTextColor(100);
             doc.text("Legend: P = PMI (Blue) | B = Brake Test (Red) | M = MOT (Green) | T = Tacho (Purple) | Multiple = Grey", doc.internal.pageSize.width - 14, 15, { align: 'right' });
@@ -792,6 +760,7 @@
             }
 
             let fleet = plannerView === 'vehicles' ? [...cachedVehicles] : [...cachedTrailers];
+            fleet = fleet.filter(v => v.registration_number !== 'FLT-01' && v.registration_number !== 'FLT-02');
             fleet.sort((a,b) => a.registration_number.localeCompare(b.registration_number));
 
             const head = [['Unit ID', ...weeks.map(wk => wk.label)]];
@@ -1004,13 +973,15 @@
                 defectReports.forEach(report => {
                     const date = new Date(report.created_at).toLocaleDateString('en-GB');
                     const unitID = report.registration || report.trailer_number || 'N/A'; 
-                    // Add data-search attribute for the search bar
+                    const notesText = report.notes ? `\n\nDriver Note: ${report.notes}` : '';
+                    const detailsDisplay = `${report.defect_details || 'No details'}${notesText}`;
+
                     tableHTML += `
-                        <tr class="defect-row" data-search="${unitID} ${report.driver_name} ${report.defect_details}">
+                        <tr class="defect-row" data-search="${unitID} ${report.driver_name} ${detailsDisplay}">
                             <td class="font-black text-slate-400 whitespace-nowrap">${date}</td>
                             <td><span class="plate-badge plate-critical">${unitID}</span></td>
                             <td class="font-bold uppercase whitespace-nowrap">${report.driver_name || 'Unknown'}</td>
-                            <td class="text-slate-300 italic text-xs" style="max-width:300px; white-space: pre-wrap;">${report.defect_details || 'No details'}</td>
+                            <td class="text-slate-300 italic text-xs" style="max-width:300px; white-space: pre-wrap;">${detailsDisplay}</td>
                             <td style="text-align:right">
                                 ${defectView === 'active' ? 
                                     `<button onclick="resolveDefect('${report.id}', \`${report.defect_details || ''}\`, '${report._origin}')" class="btn-action bg-green-600 text-white border-none">Mark Resolved</button>` : 
@@ -1032,14 +1003,13 @@
             if(currentTab === 'vehicle') data = [...cachedVehicles];
             else if(currentTab === 'trailer') data = [...cachedTrailers];
 
+            data = data.filter(v => v.registration_number !== 'FLT-01' && v.registration_number !== 'FLT-02');
+
             document.getElementById('stat-total').innerText = data.length;
 
             data.sort((a, b) => {
-                // VOR logic: push to bottom
                 if (a.is_vor && !b.is_vor) return 1;
                 if (!a.is_vor && b.is_vor) return -1;
-                
-                // Normal sorting
                 if (sortMode === 'alpha') {
                     return a.registration_number.localeCompare(b.registration_number);
                 } else {
@@ -1049,9 +1019,6 @@
 
             data.forEach(v => {
                 const vReg = v.registration_number.replace(/\s+/g, '').toUpperCase();
-                
-                // Ensure we don't display FLT-01/FLT-02 inside the normal Vehicle tab
-                if (vReg === 'FLT-01' || vReg === 'FLT-02') return;
 
                 const latestCheck = cachedChecks.find(c => {
                     const checkID = (c.registration || c.trailer_number || '').replace(/\s+/g, '').toUpperCase();
@@ -1061,88 +1028,68 @@
                 let isTrailer = cachedTrailers.some(t => t.registration_number === v.registration_number);
                 let table = isTrailer ? 'trailers' : 'vehicles';
                 
-                // LOLER check
                 const requiresLoler = isTrailer ? lolerTrailers.includes(vReg) : lolerVehicles.includes(vReg);
-
-                const pmiWk = getWeekNumber(v.pmi_due);
-                const brakeWk = getWeekNumber(v.brake_test);
-                const isPmiDue = pmiWk !== null && pmiWk <= currentWeek;
-                const isBrakeDue = brakeWk !== null && brakeWk <= currentWeek;
-
-                // --- LOCKED COMPLIANCE FIELDS ---
-                const motDateObj = v.mot_due ? new Date(v.mot_due) : null;
-                const isMotDue = !motDateObj || (motDateObj - new Date()) / 86400000 < 28;
-                const motDisplay = motDateObj ? motDateObj.toLocaleDateString('en-GB') : '--';
-
-                const tachoDateObj = v.tachograph_service_due ? new Date(v.tachograph_service_due) : null;
-                const isTachoDue = !tachoDateObj || (tachoDateObj - new Date()) / 86400000 < 28;
-                const tachoDisplay = tachoDateObj ? tachoDateObj.toLocaleDateString('en-GB') : '--';
-
-                const roadTaxDateObj = v.road_tax_due ? new Date(v.road_tax_due) : null;
-                const isRoadTaxDue = !roadTaxDateObj || (roadTaxDateObj - new Date()) / 86400000 < 28;
-                const roadTaxDisplay = roadTaxDateObj ? roadTaxDateObj.toLocaleDateString('en-GB') : '--';
-
-                const lolerDateObj = v.loler_due ? new Date(v.loler_due) : null;
-                const isLolerDue = !lolerDateObj || (lolerDateObj - new Date()) / 86400000 < 28;
-                const lolerDisplay = lolerDateObj ? lolerDateObj.toLocaleDateString('en-GB') : '--';
 
                 const card = document.createElement('div');
                 card.className = `glass-card rounded-xl ${v.is_vor ? 'card-vor' : ''}`;
-                // Setup search data attribute
                 card.setAttribute('data-search', `${v.registration_number} ${v.vin_number || ''}`);
                 
                 let vehicleSpecifics = !isTrailer ? `
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <span class="label-heading">MOT Due</span>
-                            ${isMotDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'mot_due', 'vehicles')" class="btn-compliance">Upload MOT</button>` : `<div class="week-display">${motDisplay}</div>`}
+                            ${window.getComplianceUI(v.registration_number, v.mot_due, 'mot_due', table, false, 'MOT')}
                         </div>
                         <div>
                             <span class="label-heading">PMI Week</span>
-                            ${isPmiDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'pmi_due', 'vehicles')" class="btn-compliance">Upload PMI</button>` : `<div class="week-display">WEEK ${pmiWk || '--'}</div>`}
+                            ${window.getComplianceUI(v.registration_number, v.pmi_due, 'pmi_due', table, true, 'PMI')}
                         </div>
                         <div>
                             <span class="label-heading">Road Tax</span>
-                            ${isRoadTaxDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'road_tax_due', 'vehicles')" class="btn-compliance">Upload Tax</button>` : `<div class="week-display">${roadTaxDisplay}</div>`}
+                            ${window.getComplianceUI(v.registration_number, v.road_tax_due, 'road_tax_due', table, false, 'TAX')}
                         </div>
                         <div>
                             <span class="label-heading">Brake Test Week</span>
-                            ${isBrakeDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'brake_test', 'vehicles')" class="btn-compliance">Upload Brake</button>` : `<div class="week-display">WEEK ${brakeWk || '--'}</div>`}
+                            ${window.getComplianceUI(v.registration_number, v.brake_test, 'brake_test', table, true, 'BRAKE')}
                         </div>
-                        ${requiresLoler ? `
-                        <div>
-                            <span class="label-heading">LOLER Due</span>
-                            ${isLolerDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'loler_due', 'vehicles')" class="btn-compliance">Upload LOLER</button>` : `<div class="week-display">${lolerDisplay}</div>`}
-                        </div>
-                        ` : ''}
                     </div>
-                    <div class="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-end">
+                    <div class="mt-3 pt-3 border-t border-slate-700/50 flex gap-3 items-end">
                         <div class="flex-1">
                             <span class="label-heading">Tachograph Calibration</span>
-                            ${isTachoDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'tachograph_service_due', 'vehicles')" class="btn-compliance max-w-[170px]">Upload Tacho</button>` : `<div class="week-display max-w-[170px]">${tachoDisplay}</div>`}
+                            ${window.getComplianceUI(v.registration_number, v.tachograph_service_due, 'tachograph_service_due', table, false, 'TACHO')}
                         </div>
+                        ${requiresLoler ? `
+                        <div class="flex-1">
+                            <span class="label-heading">LOLER Due</span>
+                            ${window.getComplianceUI(v.registration_number, v.loler_due, 'loler_due', table, false, 'LOLER')}
+                        </div>
+                        ` : '<div class="flex-1"></div>'}
+                    </div>
                 ` : `
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <span class="label-heading">MOT Due</span>
-                            ${isMotDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'mot_due', 'trailers')" class="btn-compliance">Upload MOT</button>` : `<div class="week-display">${motDisplay}</div>`}
+                            ${window.getComplianceUI(v.registration_number, v.mot_due, 'mot_due', table, false, 'MOT')}
                         </div>
                         <div>
                             <span class="label-heading">PMI Week</span>
-                            ${isPmiDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'pmi_due', 'trailers')" class="btn-compliance">Upload PMI</button>` : `<div class="week-display">WEEK ${pmiWk || '--'}</div>`}
+                            ${window.getComplianceUI(v.registration_number, v.pmi_due, 'pmi_due', table, true, 'PMI')}
                         </div>
                         <div>
                             <span class="label-heading">Brake Test Week</span>
-                            ${isBrakeDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'brake_test', 'trailers')" class="btn-compliance">Upload Brake</button>` : `<div class="week-display">WEEK ${brakeWk || '--'}</div>`}
+                            ${window.getComplianceUI(v.registration_number, v.brake_test, 'brake_test', table, true, 'BRAKE')}
                         </div>
-                        ${requiresLoler ? `
-                        <div>
-                            <span class="label-heading">LOLER Due</span>
-                            ${isLolerDue ? `<button onclick="window.triggerUpload('${v.registration_number}', 'loler_due', 'trailers')" class="btn-compliance">Upload LOLER</button>` : `<div class="week-display">${lolerDisplay}</div>`}
-                        </div>
-                        ` : '<div></div>'}
+                        <div></div>
                     </div>
-                    <div class="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-end"><div class="flex-grow"></div>
+                    <div class="mt-3 pt-3 border-t border-slate-700/50 flex gap-3 items-end">
+                        ${requiresLoler ? `
+                        <div class="flex-1">
+                            <span class="label-heading">LOLER Due</span>
+                            ${window.getComplianceUI(v.registration_number, v.loler_due, 'loler_due', table, false, 'LOLER')}
+                        </div>
+                        ` : '<div class="flex-1"></div>'}
+                        <div class="flex-1"></div>
+                    </div>
                 `;
 
                 let vorStampHTML = '<div class="vor-stamp">OFF ROAD</div>';
@@ -1271,13 +1218,16 @@
 
             let finalY = 25;
 
+            let targetY = new Date().getFullYear();
+            if (targetWeek < currentWeek && currentWeek > 40 && targetWeek < 10) targetY++;
+
             const matchesRecurringWeek = (dStr, intervalWeeks) => {
                 if (!dStr) return false;
                 const baseDate = new Date(dStr);
                 if(isNaN(baseDate)) return false;
 
                 if (intervalWeeks === 0) {
-                    return getWeekNumber(baseDate) === targetWeek;
+                    return getWeekNumber(baseDate) === targetWeek && baseDate.getFullYear() === targetY;
                 }
 
                 let currentD = new Date(baseDate);
@@ -1291,7 +1241,7 @@
                 for(let i = 0; i < 10; i++) {
                     const futureD = new Date(currentD);
                     futureD.setDate(futureD.getDate() + (i * intervalWeeks * 7));
-                    if (getWeekNumber(futureD) === targetWeek) return true;
+                    if (getWeekNumber(futureD) === targetWeek && futureD.getFullYear() === targetY) return true;
                 }
                 return false;
             };
@@ -1380,7 +1330,6 @@
             const vReg = reg.replace(/\s+/g, '').toUpperCase();
             const isTrailer = cachedTrailers.some(t => t.registration_number === reg);
             
-            // Allow generating a PDF even if the unit is a Forklift not yet saved in Supabase
             let vData = isTrailer ? cachedTrailers.find(t => t.registration_number === reg) : cachedVehicles.find(v => v.registration_number === reg);
             if (!vData) vData = { registration_number: reg, mot_due: null, pmi_due: null, road_tax_due: null, brake_test: null, tachograph_service_due: null, loler_due: null, is_vor: false };
             
@@ -1388,7 +1337,7 @@
             const requiresLoler = isTrailer ? lolerTrailers.includes(vReg) : lolerVehicles.includes(vReg);
 
             doc.setFontSize(22); 
-            doc.text("FTSMaintenance Audit Report", 14, 20);
+            doc.text(`FTSMaintenance Audit Report - ${vReg}`, 14, 20);
             
             let bodyData = [];
             if (!isTrailer) {
@@ -1420,7 +1369,11 @@
             doc.autoTable({ 
                 startY: doc.lastAutoTable.finalY + 10, 
                 head: [['Date', 'Condition', 'Notes']], 
-                body: checks.map(r => [new Date(r.created_at).toLocaleDateString('en-GB'), r.condition_status, r.defect_details || 'N/A']) 
+                body: checks.map(r => {
+                    const details = r.defect_details || 'N/A';
+                    const notesText = r.notes ? `\nDriver Note: ${r.notes}` : '';
+                    return [new Date(r.created_at).toLocaleDateString('en-GB'), r.condition_status, details + notesText];
+                })
             });
             
             addFooterToPDF(doc);
@@ -1432,7 +1385,7 @@
             const doc = new jsPDF('l');
             let data = currentTab === 'trailer' ? [...cachedTrailers] : [...cachedVehicles];
             
-            // Sort Alphabetically
+            data = data.filter(v => v.registration_number !== 'FLT-01' && v.registration_number !== 'FLT-02');
             data.sort((a, b) => a.registration_number.localeCompare(b.registration_number));
 
             doc.text(`${currentTab.toUpperCase()} FLEET COMPLIANCE SUMMARY`, 14, 15);
@@ -1579,7 +1532,6 @@
                             parsedDate = new Date(nextDatePrompt);
                         }
 
-                        // --- FAT FINGER SAFEGUARDS ---
                         if (isNaN(parsedDate.getTime())) {
                             await supabaseClient.storage.from('maintenance_docs').move(cleanNewPath, cleanFilePath);
                             return alert("Authorisation cancelled. The date format was not recognised.");
@@ -1588,7 +1540,7 @@
                         const today = new Date();
                         today.setHours(0,0,0,0);
                         const maxFuture = new Date();
-                        maxFuture.setFullYear(maxFuture.getFullYear() + 2); // Max 2 years in the future
+                        maxFuture.setFullYear(maxFuture.getFullYear() + 2); 
                         
                         if (parsedDate < today) {
                             await supabaseClient.storage.from('maintenance_docs').move(cleanNewPath, cleanFilePath);
@@ -1598,7 +1550,6 @@
                             await supabaseClient.storage.from('maintenance_docs').move(cleanNewPath, cleanFilePath);
                             return alert("SAFETY LOCK: Authorisation cancelled. Date exceeds 2 years in the future. Please double-check the year entered.");
                         }
-                        // ------------------------------
 
                         updateDateStr = parsedDate.toISOString().split('T')[0];
 
@@ -1613,9 +1564,8 @@
                         let testWeek = parseInt(testWeekStr);
                         let currentYr = new Date().getFullYear();
                         
-                        // NEW FIX: Local time construction to avoid timezone shifts!
                         let baseDate = getDateFromISOWeek(testWeek, currentYr);
-                        baseDate.setHours(12, 0, 0, 0); // Anchor to noon to prevent midnight DST bugs
+                        baseDate.setHours(12, 0, 0, 0); 
                         baseDate.setDate(baseDate.getDate() + 42); 
                         
                         const yyyy = baseDate.getFullYear();
