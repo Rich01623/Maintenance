@@ -68,6 +68,12 @@
         /* Force Calendar Icon to white in dark mode */
         .dark ::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; opacity: 0.7; transition: opacity 0.2s; }
         .dark ::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+
+        /* Defect Photo Thumbnails */
+        .defect-photo-thumb { width: 86px; height: 64px; object-fit: cover; border-radius: 0.75rem; border: 2px solid var(--border-color); cursor: pointer; transition: transform 0.2s ease, border-color 0.2s ease, opacity 0.2s ease; background: #0f172a; }
+        .defect-photo-thumb:hover { transform: scale(1.04); border-color: var(--fleet-amber); opacity: 0.9; }
+        .defect-photo-wrap { display: inline-flex; flex-direction: column; gap: 0.35rem; align-items: flex-start; margin-top: 0.75rem; background: transparent; border: 0; padding: 0; text-align: left; }
+        .defect-photo-label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: #f59e0b; }
     </style>
 </head>
 <body class="dark">
@@ -125,6 +131,17 @@
                 <div class="animate-spin rounded-full h-12 w-12 border-4 border-rose-600 border-t-transparent"></div>
             </div>
             <iframe id="lightbox-frame" class="w-full h-full rounded-xl border border-slate-700 bg-white shadow-2xl relative z-10" onload="document.getElementById('lightbox-loader').classList.add('hidden')"></iframe>
+        </div>
+    </div>
+
+    <!-- DEFECT PHOTO POPUP MODAL -->
+    <div id="defect-photo-modal" class="fixed inset-0 z-[11000] hidden flex items-center justify-center p-4" onclick="closeDefectPhoto()" style="background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(4px);">
+        <div class="relative animate-fade-in" onclick="event.stopPropagation()">
+            <button onclick="closeDefectPhoto()" class="absolute -top-4 -right-4 text-white hover:text-rose-500 transition-colors bg-slate-900 p-2 rounded-full border border-slate-700 shadow-xl z-10" title="Close photo">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <img id="defect-photo-large" src="" alt="Enlarged defect photo" class="block max-w-[92vw] max-h-[82vh] rounded-2xl border border-slate-700 shadow-2xl object-contain bg-slate-950">
+            <div class="text-center text-[10px] font-black uppercase tracking-widest text-slate-400 mt-3">Click outside photo to close</div>
         </div>
     </div>
 
@@ -316,6 +333,55 @@
             document.getElementById('lightbox-modal').classList.remove('hidden');
             document.getElementById('lightbox-loader').classList.remove('hidden');
             document.getElementById('lightbox-frame').src = url;
+        }
+
+
+        // --- DEFECT PHOTO HELPERS ---
+        function escapeHTML(value) {
+            return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[char]));
+        }
+
+        function getDefectPhotoUrl(report) {
+            return (report && report.defect_photo_url ? String(report.defect_photo_url).trim() : '');
+        }
+
+        window.openDefectPhoto = (url) => {
+            if (!url) return;
+            const modal = document.getElementById('defect-photo-modal');
+            const img = document.getElementById('defect-photo-large');
+            if (!modal || !img) return;
+            img.src = url;
+            modal.classList.remove('hidden');
+        };
+
+        window.closeDefectPhoto = () => {
+            const modal = document.getElementById('defect-photo-modal');
+            const img = document.getElementById('defect-photo-large');
+            if (modal) modal.classList.add('hidden');
+            if (img) img.src = '';
+        };
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') closeDefectPhoto();
+        });
+
+        function getDefectPhotoHTML(report, compact = false) {
+            const photoUrl = getDefectPhotoUrl(report);
+            if (!photoUrl) return '';
+            const safeUrl = escapeHTML(photoUrl);
+            const sizeClass = compact ? 'w-[72px] h-[54px]' : '';
+            return `
+                <button type="button" class="defect-photo-wrap" data-photo-url="${safeUrl}" onclick="openDefectPhoto(this.dataset.photoUrl)" title="Click to enlarge defect photo">
+                    <span class="defect-photo-label">Defect Photo</span>
+                    <img src="${safeUrl}" alt="Defect photo" loading="lazy" class="defect-photo-thumb ${sizeClass}" onerror="this.closest('.defect-photo-wrap').classList.add('hidden')">
+                </button>
+            `;
         }
 
         function closeLightbox() {
@@ -768,6 +834,7 @@
                     const isResolved = r.condition_status && r.condition_status.toLowerCase().includes('resolved');
                     const statusColor = isResolved ? 'text-green-500' : 'text-rose-400';
                     const notesText = r.notes ? `<br><span class="text-amber-500 font-bold mt-1 inline-block">Driver Note: ${r.notes}</span>` : '';
+                    const photoHtml = getDefectPhotoHTML(r);
                     
                     return `
                     <div class="bg-slate-800/50 p-5 rounded-xl border border-slate-700 shadow-sm hover:shadow-md transition-shadow">
@@ -780,6 +847,7 @@
                             <span class="text-xs font-bold text-slate-200">${r.driver_name || 'System'}</span>
                         </div>
                         <p class="text-slate-300 text-sm italic leading-relaxed border-l-2 border-slate-600 pl-4 py-1">${r.defect_details || 'No additional notes provided.'}${notesText}</p>
+                        ${photoHtml}
                     </div>`;
                 }).join('');
             }
@@ -1096,6 +1164,7 @@
                                 <th>Unit ID</th>
                                 <th>Driver Name</th>
                                 <th>Details</th>
+                                <th>Photo</th>
                                 <th style="text-align:right">${defectView === 'active' ? 'Action' : 'Status'}</th>
                             </tr>
                         </thead>
@@ -1107,6 +1176,7 @@
                     const unitID = report.registration || report.trailer_number || 'N/A'; 
                     const notesText = report.notes ? `\n\nDriver Note: ${report.notes}` : '';
                     const detailsDisplay = `${report.defect_details || 'No details'}${notesText}`;
+                    const photoHtml = getDefectPhotoHTML(report, true) || '<span class="text-[10px] font-black uppercase text-slate-600">No Photo</span>';
                     
                     const regArg = report.registration || '';
                     const trailArg = report.trailer_number || '';
@@ -1117,6 +1187,7 @@
                             <td><span class="plate-badge plate-critical">${unitID}</span></td>
                             <td class="font-bold uppercase whitespace-nowrap">${report.driver_name || 'Unknown'}</td>
                             <td class="text-slate-300 italic text-xs" style="max-width:300px; white-space: pre-wrap;">${detailsDisplay}</td>
+                            <td>${photoHtml}</td>
                             <td style="text-align:right">
                                 ${defectView === 'active' ? 
                                     `<div class="flex flex-col gap-1 w-full max-w-[120px] ml-auto">
