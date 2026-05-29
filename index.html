@@ -384,6 +384,146 @@
             `;
         }
 
+
+        // --- ACTIVE DEFECT REPORT HELPERS ---
+        function normalizeUnitId(value) {
+            return String(value || '').replace(/\s+/g, '').toUpperCase();
+        }
+
+        function getCheckUnitId(report) {
+            return report.registration || report.trailer_number || 'N/A';
+        }
+
+        function getCheckCondition(report) {
+            return String(report.condition_status || '').toLowerCase();
+        }
+
+        function getBaseDefectText(report) {
+            return String(report.defect_details || '').split('--- RESOLVED ---')[0].toLowerCase().replace(/\s+/g, ' ').trim();
+        }
+
+        function getDefectMatchKey(report) {
+            return `${normalizeUnitId(getCheckUnitId(report))}::${getBaseDefectText(report)}`;
+        }
+
+        function isResolvedDefectReport(report) {
+            return getCheckCondition(report).includes('resolved');
+        }
+
+        function isActiveDefectReport(report) {
+            const condition = getCheckCondition(report);
+            return condition.includes('defect') && !condition.includes('nil') && !condition.includes('resolved');
+        }
+
+        function getDefectDetailsText(report) {
+            const details = String(report.defect_details || 'No details').split('--- RESOLVED ---')[0].trim() || 'No details';
+            const notesText = report.notes ? `
+
+Driver Note: ${report.notes}` : '';
+            return `${details}${notesText}`;
+        }
+
+        function getUnitTypeLabel(report) {
+            if (report.trailer_number || report._origin === 'daily_trailer_checks') return 'Trailer';
+            return 'Vehicle';
+        }
+
+        function getActiveDefectReports() {
+            const activeReports = [];
+            const seenActive = new Set();
+            const resolvedSet = new Set();
+
+            cachedChecks.forEach(report => {
+                const key = getDefectMatchKey(report);
+
+                if (isResolvedDefectReport(report)) {
+                    resolvedSet.add(key);
+                } else if (isActiveDefectReport(report)) {
+                    if (!resolvedSet.has(key) && !seenActive.has(key)) {
+                        seenActive.add(key);
+                        activeReports.push(report);
+                    }
+                }
+            });
+
+            return activeReports;
+        }
+
+        window.generateActiveDefectsPDF = () => {
+            const defects = getActiveDefectReports();
+            if (defects.length === 0) {
+                alert('No active unresolved defects found.');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'mm', 'a4');
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const generatedAt = new Date().toLocaleString('en-GB');
+
+            doc.setFillColor(15, 23, 42);
+            doc.rect(0, 0, pageWidth, 30, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text('FTS ACTIVE DEFECT REPORT', 14, 13);
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Unresolved vehicle and trailer defects | Generated: ${generatedAt} | Total: ${defects.length}`, 14, 22);
+
+            doc.setTextColor(15, 23, 42);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Only defects not marked as resolved are included in this report.', 14, 39);
+
+            const body = defects.map(report => {
+                const created = new Date(report.created_at);
+                return [
+                    isNaN(created) ? 'N/A' : created.toLocaleDateString('en-GB'),
+                    isNaN(created) ? 'N/A' : created.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                    getCheckUnitId(report),
+                    getUnitTypeLabel(report),
+                    report.driver_name || 'Unknown',
+                    getDefectDetailsText(report)
+                ];
+            });
+
+            doc.autoTable({
+                startY: 45,
+                head: [['Date', 'Time', 'Unit', 'Type', 'Driver Name', 'Defect Details']],
+                body,
+                theme: 'grid',
+                margin: { left: 12, right: 12 },
+                styles: {
+                    fontSize: 8,
+                    cellPadding: 2.5,
+                    valign: 'top',
+                    overflow: 'linebreak',
+                    lineColor: [226, 232, 240],
+                    lineWidth: 0.15
+                },
+                headStyles: {
+                    fillColor: [225, 29, 72],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold',
+                    halign: 'left'
+                },
+                alternateRowStyles: { fillColor: [248, 250, 252] },
+                columnStyles: {
+                    0: { cellWidth: 23 },
+                    1: { cellWidth: 17 },
+                    2: { cellWidth: 26, fontStyle: 'bold' },
+                    3: { cellWidth: 20 },
+                    4: { cellWidth: 34 },
+                    5: { cellWidth: 153 }
+                }
+            });
+
+            addFooterToPDF(doc);
+            const stamp = new Date().toISOString().slice(0, 10);
+            doc.save(`FTS_Active_Defects_${stamp}.pdf`);
+        };
+
         function closeLightbox() {
             document.getElementById('lightbox-modal').classList.add('hidden');
             document.getElementById('lightbox-frame').src = '';
@@ -1094,27 +1234,7 @@
                 let defectReports = [];
                 
                 if (defectView === 'active') {
-                    let seenActive = new Set();
-                    let resolvedSet = new Set();
-
-                    cachedChecks.forEach(c => {
-                        const unitID = c.registration || c.trailer_number || 'N/A';
-                        const rawText = c.defect_details || '';
-                        const originalText = rawText.split('--- RESOLVED ---')[0].toLowerCase().replace(/\s+/g, ' ').trim();
-                        const key = `${unitID}::${originalText}`;
-
-                        const isResolved = c.condition_status && c.condition_status.toLowerCase().includes('resolved');
-                        const isDefect = c.condition_status && c.condition_status.toLowerCase().includes('defect') && !c.condition_status.toLowerCase().includes('nil') && !isResolved;
-
-                        if (isResolved) {
-                            resolvedSet.add(key);
-                        } else if (isDefect) {
-                            if (!resolvedSet.has(key) && !seenActive.has(key)) {
-                                seenActive.add(key);
-                                defectReports.push(c);
-                            }
-                        }
-                    });
+                    defectReports = getActiveDefectReports();
                 } else {
                     let seenHistory = new Set();
                     cachedChecks.forEach(c => {
@@ -1138,9 +1258,10 @@
                 const sectionHeader = document.createElement('div');
                 sectionHeader.className = 'col-span-full mb-2';
                 sectionHeader.innerHTML = `
-                    <div class="sub-nav">
+                    <div class="sub-nav flex-wrap">
                         <button onclick="setDefectView('active')" class="sub-nav-btn ${defectView === 'active' ? 'active' : ''}">Active Defects</button>
                         <button onclick="setDefectView('history')" class="sub-nav-btn ${defectView === 'history' ? 'active' : ''}">History</button>
+                        <button onclick="generateActiveDefectsPDF()" class="sub-nav-btn bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-500">Generate PDF</button>
                     </div>
                 `;
                 grid.appendChild(sectionHeader);
