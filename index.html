@@ -415,6 +415,34 @@
             return condition.includes('defect') && !condition.includes('nil') && !condition.includes('resolved');
         }
 
+        const defectRouteLabels = {
+            active: 'Active Defects',
+            jcc: 'JCC',
+            chris: 'Chris',
+            martyn: 'Martyn'
+        };
+
+        function getDefectRoute(report) {
+            const rawRoute = String(
+                report.defect_assigned_to ||
+                report.defect_route ||
+                report.assigned_to ||
+                'active'
+            ).toLowerCase().trim();
+
+            if (['jcc', 'chris', 'martyn'].includes(rawRoute)) return rawRoute;
+            return 'active';
+        }
+
+        function getDefectRouteLabel(reportOrRoute) {
+            const route = typeof reportOrRoute === 'string' ? reportOrRoute : getDefectRoute(reportOrRoute);
+            return defectRouteLabels[route] || 'Active Defects';
+        }
+
+        function findCachedDefectReport(id, origin = '') {
+            return cachedChecks.find(c => String(c.id) === String(id) && (!origin || c._origin === origin));
+        }
+
         function getDefectDetailsText(report) {
             const details = String(report.defect_details || 'No details').split('--- RESOLVED ---')[0].trim() || 'No details';
             const notesText = report.notes ? `
@@ -428,7 +456,28 @@ Driver Note: ${report.notes}` : '';
             return 'Vehicle';
         }
 
-        function getActiveDefectReports() {
+        function getActiveDefectReports(route = 'active') {
+            const activeReports = [];
+            const seenActive = new Set();
+            const resolvedSet = new Set();
+
+            cachedChecks.forEach(report => {
+                const key = getDefectMatchKey(report);
+
+                if (isResolvedDefectReport(report)) {
+                    resolvedSet.add(key);
+                } else if (isActiveDefectReport(report) && getDefectRoute(report) === route) {
+                    if (!resolvedSet.has(key) && !seenActive.has(key)) {
+                        seenActive.add(key);
+                        activeReports.push(report);
+                    }
+                }
+            });
+
+            return activeReports;
+        }
+
+        function getAllUnresolvedDefectReports() {
             const activeReports = [];
             const seenActive = new Set();
             const resolvedSet = new Set();
@@ -449,10 +498,11 @@ Driver Note: ${report.notes}` : '';
             return activeReports;
         }
 
-        window.generateActiveDefectsPDF = () => {
-            const defects = getActiveDefectReports();
+        window.generateActiveDefectsPDF = (route = 'all') => {
+            const defects = route === 'all' ? getAllUnresolvedDefectReports() : getActiveDefectReports(route);
+            const reportLabel = route === 'all' ? 'All Unresolved' : getDefectRouteLabel(route);
             if (defects.length === 0) {
-                alert('No active unresolved defects found.');
+                alert(`No unresolved defects found for ${reportLabel}.`);
                 return;
             }
 
@@ -465,15 +515,15 @@ Driver Note: ${report.notes}` : '';
             doc.rect(0, 0, pageWidth, 30, 'F');
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(18);
-            doc.setFont('helvetica', 'bold');
+            doc.setFont(undefined, 'bold');
             doc.text('FTS ACTIVE DEFECT REPORT', 14, 13);
             doc.setFontSize(9);
-            doc.setFont('helvetica', 'normal');
-            doc.text(`Unresolved vehicle and trailer defects | Generated: ${generatedAt} | Total: ${defects.length}`, 14, 22);
+            doc.setFont(undefined, 'normal');
+            doc.text(`${reportLabel} defects | Generated: ${generatedAt} | Total: ${defects.length}`, 14, 22);
 
             doc.setTextColor(15, 23, 42);
             doc.setFontSize(10);
-            doc.setFont('helvetica', 'bold');
+            doc.setFont(undefined, 'bold');
             doc.text('Only defects not marked as resolved are included in this report.', 14, 39);
 
             const body = defects.map(report => {
@@ -483,6 +533,7 @@ Driver Note: ${report.notes}` : '';
                     isNaN(created) ? 'N/A' : created.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
                     getCheckUnitId(report),
                     getUnitTypeLabel(report),
+                    getDefectRouteLabel(report),
                     report.driver_name || 'Unknown',
                     getDefectDetailsText(report)
                 ];
@@ -490,7 +541,7 @@ Driver Note: ${report.notes}` : '';
 
             doc.autoTable({
                 startY: 45,
-                head: [['Date', 'Time', 'Unit', 'Type', 'Driver Name', 'Defect Details']],
+                head: [['Date', 'Time', 'Unit', 'Type', 'Section', 'Driver Name', 'Defect Details']],
                 body,
                 theme: 'grid',
                 margin: { left: 12, right: 12 },
@@ -510,18 +561,20 @@ Driver Note: ${report.notes}` : '';
                 },
                 alternateRowStyles: { fillColor: [248, 250, 252] },
                 columnStyles: {
-                    0: { cellWidth: 23 },
-                    1: { cellWidth: 17 },
-                    2: { cellWidth: 26, fontStyle: 'bold' },
-                    3: { cellWidth: 20 },
-                    4: { cellWidth: 34 },
-                    5: { cellWidth: 153 }
+                    0: { cellWidth: 22 },
+                    1: { cellWidth: 16 },
+                    2: { cellWidth: 25, fontStyle: 'bold' },
+                    3: { cellWidth: 18 },
+                    4: { cellWidth: 24 },
+                    5: { cellWidth: 30 },
+                    6: { cellWidth: 138 }
                 }
             });
 
             addFooterToPDF(doc);
             const stamp = new Date().toISOString().slice(0, 10);
-            doc.save(`FTS_Active_Defects_${stamp}.pdf`);
+            const routeSlug = route === 'all' ? 'All_Unresolved' : reportLabel.replace(/\s+/g, '_');
+            doc.save(`FTS_Defects_${routeSlug}_${stamp}.pdf`);
         };
 
         function closeLightbox() {
@@ -669,10 +722,13 @@ Driver Note: ${report.notes}` : '';
         };
 
         // --- SEND DEFECT FUNCTION ---
-        window.sendDefect = async (id, targetTable) => {
-            const report = cachedChecks.find(c => String(c.id) === String(id));
+        window.sendDefect = async (id, targetTable, origin = '') => {
+            const report = findCachedDefectReport(id, origin);
             if (!report) return alert("Error: Report not found");
             
+            const route = targetTable === 'martyns_maintenance' ? 'martyn' : (targetTable === 'jcc_bookings' ? 'jcc' : 'active');
+            const label = route === 'martyn' ? 'Martyn' : (route === 'jcc' ? 'JCC' : 'Active Defects');
+
             const payload = {
                 submitted_by: currentUserEmail,
                 defect_details: report.defect_details || ''
@@ -687,8 +743,25 @@ Driver Note: ${report.notes}` : '';
             try {
                 const { error } = await supabaseClient.from(targetTable).insert([payload]);
                 if (error) throw error;
-                const label = targetTable === 'martyns_maintenance' ? 'Martyn' : 'JCC';
-                alert(`Defect successfully sent to ${label}!`);
+
+                const routeUpdate = {
+                    defect_assigned_to: route,
+                    defect_routed_at: new Date().toISOString(),
+                    defect_routed_by: currentUserEmail
+                };
+
+                const { error: routeError } = await supabaseClient
+                    .from(report._origin)
+                    .update(routeUpdate)
+                    .eq('id', report.id);
+
+                if (routeError) {
+                    alert(`Defect was sent to ${label}, but it could not be moved into the ${label} filter. Please run the SQL I gave you to add the defect_assigned_to columns. Supabase error: ${routeError.message}`);
+                    return;
+                }
+
+                alert(`Defect successfully sent to ${label} and moved into the ${label} filter.`);
+                loadFleet();
             } catch (err) {
                 alert(`Error sending defect: ${err.message}`);
             }
@@ -932,8 +1005,8 @@ Driver Note: ${report.notes}` : '';
             renderCalendar();
         }
 
-        window.resolveDefect = async (id) => {
-            const report = cachedChecks.find(c => String(c.id) === String(id));
+        window.resolveDefect = async (id, origin = '') => {
+            const report = findCachedDefectReport(id, origin);
             if (!report) return alert("Error: Report not found");
 
             const who = prompt("Enter your name:");
@@ -1233,8 +1306,8 @@ Driver Note: ${report.notes}` : '';
             if (currentTab === 'defects') {
                 let defectReports = [];
                 
-                if (defectView === 'active') {
-                    defectReports = getActiveDefectReports();
+                if (['active', 'jcc', 'chris', 'martyn'].includes(defectView)) {
+                    defectReports = getActiveDefectReports(defectView);
                 } else {
                     let seenHistory = new Set();
                     cachedChecks.forEach(c => {
@@ -1261,7 +1334,10 @@ Driver Note: ${report.notes}` : '';
                     <div class="sub-nav flex-wrap">
                         <button onclick="setDefectView('active')" class="sub-nav-btn ${defectView === 'active' ? 'active' : ''}">Active Defects</button>
                         <button onclick="setDefectView('history')" class="sub-nav-btn ${defectView === 'history' ? 'active' : ''}">History</button>
-                        <button onclick="generateActiveDefectsPDF()" class="sub-nav-btn bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-500">Generate PDF</button>
+                        <button onclick="generateActiveDefectsPDF('all')" class="sub-nav-btn bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-500">Generate PDF</button>
+                        <button onclick="setDefectView('jcc')" class="sub-nav-btn ${defectView === 'jcc' ? 'active' : ''}">JCC</button>
+                        <button onclick="setDefectView('chris')" class="sub-nav-btn ${defectView === 'chris' ? 'active' : ''}">Chris</button>
+                        <button onclick="setDefectView('martyn')" class="sub-nav-btn ${defectView === 'martyn' ? 'active' : ''}">Martyn</button>
                     </div>
                 `;
                 grid.appendChild(sectionHeader);
@@ -1269,7 +1345,7 @@ Driver Note: ${report.notes}` : '';
                 if (defectReports.length === 0) {
                     const emptyMsg = document.createElement('div');
                     emptyMsg.className = 'glass-card p-8 text-center text-slate-500 font-bold uppercase col-span-full';
-                    emptyMsg.innerText = defectView === 'active' ? 'No Active Defects Reported' : 'No Resolved History Found';
+                    emptyMsg.innerText = defectView === 'history' ? 'No Resolved History Found' : `No Defects Found In ${getDefectRouteLabel(defectView)}`;
                     grid.appendChild(emptyMsg);
                     return;
                 }
@@ -1286,7 +1362,8 @@ Driver Note: ${report.notes}` : '';
                                 <th>Driver Name</th>
                                 <th>Details</th>
                                 <th>Photo</th>
-                                <th style="text-align:right">${defectView === 'active' ? 'Action' : 'Status'}</th>
+                                <th>Section</th>
+                                <th style="text-align:right">${defectView !== 'history' ? 'Action' : 'Status'}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1309,12 +1386,13 @@ Driver Note: ${report.notes}` : '';
                             <td class="font-bold uppercase whitespace-nowrap">${report.driver_name || 'Unknown'}</td>
                             <td class="text-slate-300 italic text-xs" style="max-width:300px; white-space: pre-wrap;">${detailsDisplay}</td>
                             <td>${photoHtml}</td>
+                            <td><span class="text-[9px] font-black uppercase px-2 py-1 rounded bg-slate-900 text-slate-300 border border-slate-700">${defectView === 'history' ? 'Resolved' : getDefectRouteLabel(report)}</span></td>
                             <td style="text-align:right">
-                                ${defectView === 'active' ? 
+                                ${defectView !== 'history' ? 
                                     `<div class="flex flex-col gap-1 w-full max-w-[120px] ml-auto">
-                                        <button onclick="resolveDefect('${report.id}')" class="btn-action bg-green-600 hover:bg-green-500 text-white border-none w-full text-center">Mark Resolved</button>
-                                        <button onclick="sendDefect('${report.id}', 'martyns_maintenance')" class="btn-action bg-blue-600 hover:bg-blue-500 text-white border-none w-full text-center">Send to Martyn</button>
-                                        <button onclick="sendDefect('${report.id}', 'jcc_bookings')" class="btn-action bg-purple-600 hover:bg-purple-500 text-white border-none w-full text-center">Book into JCC</button>
+                                        <button onclick="resolveDefect('${report.id}', '${report._origin || ''}')" class="btn-action bg-green-600 hover:bg-green-500 text-white border-none w-full text-center">Mark Resolved</button>
+                                        <button onclick="sendDefect('${report.id}', 'martyns_maintenance', '${report._origin || ''}')" class="btn-action bg-blue-600 hover:bg-blue-500 text-white border-none w-full text-center">Send to Martyn</button>
+                                        <button onclick="sendDefect('${report.id}', 'jcc_bookings', '${report._origin || ''}')" class="btn-action bg-purple-600 hover:bg-purple-500 text-white border-none w-full text-center">Book into JCC</button>
                                         <button onclick="markVorFromDefect('${regArg}', '${trailArg}')" class="btn-action bg-red-600 hover:bg-red-500 text-white border-none w-full text-center">Mark VOR</button>
                                     </div>` : 
                                     `<span class="text-[9px] font-black text-green-500 uppercase">Resolved</span>`
