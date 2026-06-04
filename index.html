@@ -746,6 +746,13 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
             
             if (targetTable === 'jcc_bookings') {
                 payload.inspection_type = 'DEFECT';
+
+                // JCC bookings has vehicle_reg as NOT NULL.
+                // For trailer-only defects, use the trailer number as the unit identifier
+                // so trailer defects can be booked into JCC without failing Supabase validation.
+                if (!payload.vehicle_reg && payload.trailer_number) {
+                    payload.vehicle_reg = payload.trailer_number;
+                }
             }
 
             if (targetTable === 'chris_maintenance') {
