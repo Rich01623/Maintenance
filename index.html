@@ -52,6 +52,10 @@
         .defect-table th { text-align: left; padding: 12px; background: rgba(225, 29, 72, 0.1); color: var(--fleet-red); font-weight: 800; text-transform: uppercase; font-size: 11px; border-bottom: 2px solid var(--border-color); }
         .defect-table td { padding: 12px; border-bottom: 1px solid var(--border-color); vertical-align: top; }
         .defect-row:hover { background: rgba(255,255,255,0.02); }
+        .defect-rejected-row td { background: rgba(245, 158, 11, 0.14) !important; border-top: 1px solid rgba(245, 158, 11, 0.45); border-bottom: 1px solid rgba(245, 158, 11, 0.45); }
+        .defect-rejected-row td:first-child { border-left: 4px solid var(--fleet-amber); }
+        .defect-rejected-row:hover td { background: rgba(245, 158, 11, 0.20) !important; }
+        .rejected-inline-badge { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 6px; padding: 3px 8px; border-radius: 999px; background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.45); font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
 
         .sub-nav { display: flex; gap: 10px; margin-bottom: 15px; }
         .sub-nav-btn { padding: 6px 16px; border-radius: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; border: 1px solid var(--border-color); color: #94a3b8; transition: 0.2s; }
@@ -290,6 +294,29 @@
             </div>
         </div>
     </div>
+
+    <!-- ROUTING ADDITIONAL DETAILS MODAL -->
+    <div id="routing-details-modal" class="fixed inset-0 z-[12000] hidden flex items-center justify-center transition-opacity" style="background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(6px);">
+        <div class="glass-card w-full max-w-xl p-6 relative animate-fade-in" style="background: var(--card-bg); border-radius: 1.5rem; border: 1px solid var(--border-color);">
+            <button onclick="resolveRoutingDetailsModal(null)" class="absolute top-4 right-4 text-slate-400 hover:text-rose-500 transition-colors bg-slate-800 hover:bg-slate-700 p-2 rounded-lg border border-slate-700">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <div class="mb-5 border-b border-slate-700 pb-4 pr-10">
+                <h3 class="text-2xl font-black uppercase tracking-tight text-white">Additional Details</h3>
+                <p id="routing-details-subtitle" class="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Would you like to provide additional details?</p>
+            </div>
+
+            <label class="label-heading mb-2">Optional note for recipient</label>
+            <textarea id="routing-details-text" class="input-text p-3" rows="6" placeholder="Add any extra details, instructions, or context here..." style="resize: vertical; min-height: 150px;"></textarea>
+
+            <div class="flex flex-col sm:flex-row justify-end gap-3 mt-6 pt-4 border-t border-slate-700">
+                <button onclick="resolveRoutingDetailsModal(null)" class="bg-slate-800 text-slate-300 px-5 py-3 rounded-xl text-xs font-black uppercase hover:bg-slate-700 transition-all border border-slate-700">Cancel</button>
+                <button onclick="resolveRoutingDetailsModal('')" class="bg-slate-700 text-white px-5 py-3 rounded-xl text-xs font-black uppercase hover:bg-slate-600 transition-all">Send Without Notes</button>
+                <button onclick="resolveRoutingDetailsModal(document.getElementById('routing-details-text').value)" class="bg-rose-600 text-white px-5 py-3 rounded-xl text-xs font-black uppercase hover:bg-rose-500 transition-all">Save Details & Send</button>
+            </div>
+        </div>
+    </div>
+
 
     <input type="file" id="compliance-upload-hidden" class="hidden" accept=".pdf,.jpg,.jpeg,.png">
 
@@ -573,10 +600,13 @@
             const notesText = report.notes ? `
 
 Driver Note: ${report.notes}` : '';
+            const routingDetailsText = report.defect_routing_details ? `
+
+Additional Details: ${report.defect_routing_details}` : '';
             const rejectText = report.defect_rejected_reason ? `
 
 Rejected Reason: ${report.defect_rejected_reason}` : '';
-            return `${details}${notesText}${rejectText}`;
+            return `${details}${notesText}${routingDetailsText}${rejectText}`;
         }
 
         function getUnitTypeLabel(report) {
@@ -852,6 +882,39 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
             }
         };
 
+
+        // --- ROUTING DETAILS MODAL HELPERS ---
+        let routingDetailsResolver = null;
+
+        function openRoutingDetailsModal(label, existingText = '') {
+            return new Promise((resolve) => {
+                routingDetailsResolver = resolve;
+                const modal = document.getElementById('routing-details-modal');
+                const textBox = document.getElementById('routing-details-text');
+                const subtitle = document.getElementById('routing-details-subtitle');
+                if (!modal || !textBox || !subtitle) {
+                    // Fallback only if the modal markup is missing for any reason.
+                    const fallback = prompt(`Would you like to provide additional details for ${label}?`, existingText || '');
+                    resolve(fallback === null ? null : fallback);
+                    return;
+                }
+                subtitle.innerText = `Would you like to provide additional details for ${label}?`;
+                textBox.value = existingText || '';
+                modal.classList.remove('hidden');
+                setTimeout(() => textBox.focus(), 50);
+            });
+        }
+
+        function resolveRoutingDetailsModal(value) {
+            const modal = document.getElementById('routing-details-modal');
+            if (modal) modal.classList.add('hidden');
+            if (routingDetailsResolver) {
+                const resolver = routingDetailsResolver;
+                routingDetailsResolver = null;
+                resolver(value);
+            }
+        }
+
         // --- SEND DEFECT FUNCTION ---
         window.sendDefect = async (id, targetTable, origin = '') => {
             const report = findCachedDefectReport(id, origin);
@@ -860,10 +923,16 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
             const route = targetTable === 'martyns_maintenance' ? 'martyn' : (targetTable === 'jcc_bookings' ? 'jcc' : (targetTable === 'chris_maintenance' ? 'chris' : 'active'));
             const label = route === 'martyn' ? 'Martyn' : (route === 'jcc' ? 'JCC' : (route === 'chris' ? 'Chris' : 'Active Defects'));
 
+            let routingDetails = '';
+            const routingDetailsInput = await openRoutingDetailsModal(label, report.defect_routing_details || '');
+            if (routingDetailsInput === null) return; // Cancel means do not send the defect.
+            routingDetails = String(routingDetailsInput || '').trim();
+
             const payload = {
                 submitted_by: currentUserEmail,
                 defect_details: report.defect_details || ''
             };
+            if (routingDetails) payload.additional_details = routingDetails;
             if (report.registration && report.registration.trim() !== '' && report.registration !== 'N/A') payload.vehicle_reg = report.registration;
             if (report.trailer_number && report.trailer_number.trim() !== '' && report.trailer_number !== 'N/A') payload.trailer_number = report.trailer_number;
             
@@ -895,6 +964,7 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
                     defect_assigned_to: route,
                     defect_routed_at: new Date().toISOString(),
                     defect_routed_by: currentUserEmail,
+                    defect_routing_details: routingDetails || null,
                     defect_rejected_reason: null,
                     defect_rejected_at: null,
                     defect_rejected_by: null
@@ -1149,7 +1219,7 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
         }
 
         function setDefectView(view) {
-            defectView = view;
+            defectView = view === 'rejected' ? 'active' : view;
             renderFleet();
         }
 
@@ -1207,7 +1277,8 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
             if (error) {
                 alert("Error rejecting defect: " + error.message + ". Please run the SQL to add the rejection columns.");
             } else {
-                alert("Defect rejected and moved into the Rejected section.");
+                defectView = 'active';
+                alert("Defect rejected and returned to Active Defects. It will be highlighted with the rejection reason.");
                 loadFleet();
             }
         };
@@ -1525,7 +1596,6 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
                         <button onclick="setDefectView('active')" class="sub-nav-btn ${defectView === 'active' ? 'active' : ''}">Active Defects</button>
                         <button onclick="setDefectView('history')" class="sub-nav-btn ${defectView === 'history' ? 'active' : ''}">History</button>
                         <button onclick="generateActiveDefectsPDF('all')" class="sub-nav-btn bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-500">Generate PDF</button>
-                        <button onclick="setDefectView('rejected')" class="sub-nav-btn ${defectView === 'rejected' ? 'active' : ''}">Rejected</button>
                         <button onclick="setDefectView('unallocated')" class="sub-nav-btn ${defectView === 'unallocated' ? 'active' : ''}">Un-allocated</button>
                         <button onclick="setDefectView('jcc')" class="sub-nav-btn ${defectView === 'jcc' ? 'active' : ''}">JCC</button>
                         <button onclick="setDefectView('chris')" class="sub-nav-btn ${defectView === 'chris' ? 'active' : ''}">Chris</button>
@@ -1565,15 +1635,18 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
                     const date = new Date(report.created_at).toLocaleDateString('en-GB');
                     const unitID = report.registration || report.trailer_number || 'N/A'; 
                     const notesText = report.notes ? `\n\nDriver Note: ${report.notes}` : '';
+                    const routingDetailsText = report.defect_routing_details ? `\n\nAdditional Details: ${report.defect_routing_details}` : '';
                     const rejectedReasonText = report.defect_rejected_reason ? `\n\nRejected Reason: ${report.defect_rejected_reason}` : '';
-                    const detailsDisplay = `${report.defect_details || 'No details'}${notesText}${rejectedReasonText}`;
+                    const detailsDisplay = `${report.defect_details || 'No details'}${notesText}${routingDetailsText}${rejectedReasonText}`;
                     const photoHtml = getDefectPhotoHTML(report, true) || '<span class="text-[10px] font-black uppercase text-slate-600">No Photo</span>';
                     
                     const regArg = report.registration || '';
                     const trailArg = report.trailer_number || '';
                     const reportRoute = getDefectRoute(report);
-                    const showRouteButtons = ['active', 'unallocated'].includes(defectView) && reportRoute !== 'rejected';
-                    const showRejectButton = defectView !== 'history' && reportRoute !== 'rejected';
+                    const isRejectedReport = reportRoute === 'rejected' || !!report.defect_rejected_reason;
+                    const rejectedBadgeHtml = isRejectedReport ? '<span class="rejected-inline-badge">Rejected</span>\n' : '';
+                    const showRouteButtons = ['active', 'unallocated'].includes(defectView) && !isRejectedReport;
+                    const showRejectButton = defectView !== 'history' && !isRejectedReport;
                     let actionHtml = `<span class="text-[9px] font-black text-green-500 uppercase">Resolved</span>`;
 
                     if (defectView !== 'history') {
@@ -1588,11 +1661,11 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
                     }
 
                     tableHTML += `
-                        <tr class="defect-row" data-search="${unitID} ${report.driver_name} ${detailsDisplay}">
+                        <tr class="defect-row ${isRejectedReport ? 'defect-rejected-row' : ''}" data-search="${unitID} ${report.driver_name} ${detailsDisplay}">
                             <td class="font-black text-slate-400 whitespace-nowrap">${date}</td>
-                            <td><span class="plate-badge plate-critical">${unitID}</span></td>
+                            <td><span class="plate-badge ${isRejectedReport ? 'plate-warn' : 'plate-critical'}">${unitID}</span></td>
                             <td class="font-bold uppercase whitespace-nowrap">${report.driver_name || 'Unknown'}</td>
-                            <td class="text-slate-300 italic text-xs" style="max-width:300px; white-space: pre-wrap;">${detailsDisplay}</td>
+                            <td class="text-slate-300 italic text-xs" style="max-width:300px; white-space: pre-wrap;">${rejectedBadgeHtml}${detailsDisplay}</td>
                             <td>${photoHtml}</td>
                             <td><span class="text-[9px] font-black uppercase px-2 py-1 rounded bg-slate-900 text-slate-300 border border-slate-700">${defectView === 'history' ? 'Resolved' : getDefectRouteLabel(report)}</span></td>
                             <td style="text-align:right">${actionHtml}</td>
