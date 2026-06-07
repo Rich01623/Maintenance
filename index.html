@@ -309,6 +309,21 @@
             <label class="label-heading mb-2">Optional note for recipient</label>
             <textarea id="routing-details-text" class="input-text p-3" rows="6" placeholder="Add any extra details, instructions, or context here..." style="resize: vertical; min-height: 150px;"></textarea>
 
+            <div class="mt-5 rounded-2xl border border-slate-700 bg-slate-900/40 p-4">
+                <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" id="routing-create-planner-card" class="mt-1 h-4 w-4 accent-rose-600" onchange="toggleRoutingPlannerCardOptions()">
+                    <span>
+                        <span class="block text-xs font-black uppercase tracking-widest text-white">Create Job Card in Planner</span>
+                        <span class="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">Use this only when the defect needs planning into the transport planner.</span>
+                    </span>
+                </label>
+                <div id="routing-planner-card-options" class="hidden mt-4">
+                    <label class="label-heading mb-2">Work to be carried out by</label>
+                    <input type="date" id="routing-planner-card-date" class="input-text p-3">
+                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2">The planner card will show the unit, recipient and defect details.</p>
+                </div>
+            </div>
+
             <div class="flex flex-col sm:flex-row justify-end gap-3 mt-6 pt-4 border-t border-slate-700">
                 <button onclick="resolveRoutingDetailsModal(null)" class="bg-slate-800 text-slate-300 px-5 py-3 rounded-xl text-xs font-black uppercase hover:bg-slate-700 transition-all border border-slate-700">Cancel</button>
                 <button onclick="resolveRoutingDetailsModal('')" class="bg-slate-700 text-white px-5 py-3 rounded-xl text-xs font-black uppercase hover:bg-slate-600 transition-all">Send Without Notes</button>
@@ -885,6 +900,20 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
 
         // --- ROUTING DETAILS MODAL HELPERS ---
         let routingDetailsResolver = null;
+        const PLANNER_MAINTENANCE_CUSTOMER_NAME = "🔧 PLANNED MAINTENANCE";
+
+        function toggleRoutingPlannerCardOptions() {
+            const checkbox = document.getElementById('routing-create-planner-card');
+            const options = document.getElementById('routing-planner-card-options');
+            if (!checkbox || !options) return;
+            options.classList.toggle('hidden', !checkbox.checked);
+        }
+
+        function getDateInputTodayValue() {
+            const d = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        }
 
         function openRoutingDetailsModal(label, existingText = '') {
             return new Promise((resolve) => {
@@ -892,14 +921,24 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
                 const modal = document.getElementById('routing-details-modal');
                 const textBox = document.getElementById('routing-details-text');
                 const subtitle = document.getElementById('routing-details-subtitle');
+                const createCardCheckbox = document.getElementById('routing-create-planner-card');
+                const cardOptions = document.getElementById('routing-planner-card-options');
+                const cardDate = document.getElementById('routing-planner-card-date');
+
                 if (!modal || !textBox || !subtitle) {
                     // Fallback only if the modal markup is missing for any reason.
                     const fallback = prompt(`Would you like to provide additional details for ${label}?`, existingText || '');
-                    resolve(fallback === null ? null : fallback);
+                    resolve(fallback === null ? null : { details: fallback, createPlannerCard: false, workByDate: '' });
                     return;
                 }
+
                 subtitle.innerText = `Would you like to provide additional details for ${label}?`;
                 textBox.value = existingText || '';
+
+                if (createCardCheckbox) createCardCheckbox.checked = false;
+                if (cardOptions) cardOptions.classList.add('hidden');
+                if (cardDate) cardDate.value = getDateInputTodayValue();
+
                 modal.classList.remove('hidden');
                 setTimeout(() => textBox.focus(), 50);
             });
@@ -907,12 +946,97 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
 
         function resolveRoutingDetailsModal(value) {
             const modal = document.getElementById('routing-details-modal');
+            const createCardCheckbox = document.getElementById('routing-create-planner-card');
+            const cardDate = document.getElementById('routing-planner-card-date');
+
+            if (value !== null && createCardCheckbox && createCardCheckbox.checked && (!cardDate || !cardDate.value)) {
+                alert('Please choose the date the work needs to be carried out by, or untick Create Job Card in Planner.');
+                return;
+            }
+
             if (modal) modal.classList.add('hidden');
             if (routingDetailsResolver) {
                 const resolver = routingDetailsResolver;
                 routingDetailsResolver = null;
-                resolver(value);
+
+                if (value === null) {
+                    resolver(null);
+                    return;
+                }
+
+                resolver({
+                    details: String(value || ''),
+                    createPlannerCard: !!(createCardCheckbox && createCardCheckbox.checked),
+                    workByDate: cardDate ? cardDate.value : ''
+                });
             }
+        }
+
+        function getPlannerWorkByDateTime(workByDate) {
+            if (!workByDate) return new Date().toISOString();
+            const d = new Date(`${workByDate}T09:00:00`);
+            if (isNaN(d.getTime())) return new Date().toISOString();
+            return d.toISOString();
+        }
+
+        function formatPlannerWorkByDate(workByDate) {
+            if (!workByDate) return 'ASAP';
+            const d = new Date(`${workByDate}T12:00:00`);
+            if (isNaN(d.getTime())) return workByDate;
+            return d.toLocaleDateString('en-GB');
+        }
+
+        async function createPlannerJobCardFromDefect(report, label, routingDetails, workByDate) {
+            const assetNumber = getCheckUnitId(report);
+            if (!assetNumber || assetNumber === 'N/A') {
+                throw new Error('Could not identify the vehicle or trailer number for the planner card.');
+            }
+
+            const unitType = getUnitTypeLabel(report);
+            const baseDefectDetails = getDefectDetailsText(report);
+            const requiredByText = formatPlannerWorkByDate(workByDate);
+            const allocatedLabel = label || 'Maintenance';
+
+            const defectSummaryParts = [
+                baseDefectDetails,
+                routingDetails ? `Additional Details: ${routingDetails}` : ''
+            ].filter(Boolean);
+
+            const plannerPayload = {
+                customer_name: PLANNER_MAINTENANCE_CUSTOMER_NAME,
+                coll_postcode: assetNumber,
+                del_postcode: 'BOOK REPAIR',
+                coll_ref: defectSummaryParts.join('\n\n'),
+                del_ref: `ALLOCATED TO ${allocatedLabel.toUpperCase()} | REQUIRED BY ${requiredByText}`,
+                coll_town: unitType.toUpperCase(),
+                del_town: allocatedLabel,
+                total_price: '0',
+                vehicle_type: unitType,
+                status: 'pending',
+                dispatch_status: 'unsent',
+                coll_datetime: getPlannerWorkByDateTime(workByDate)
+            };
+
+            // Avoid accidental duplicate planner cards for the same unit, recipient and defect text.
+            const { data: existing, error: existingError } = await supabaseClient
+                .from('quotes')
+                .select('id')
+                .eq('customer_name', PLANNER_MAINTENANCE_CUSTOMER_NAME)
+                .eq('coll_postcode', assetNumber)
+                .eq('del_postcode', 'BOOK REPAIR')
+                .eq('del_ref', plannerPayload.del_ref)
+                .eq('coll_ref', plannerPayload.coll_ref)
+                .neq('status', 'cancelled')
+                .limit(1);
+
+            if (existingError) throw existingError;
+            if (existing && existing.length > 0) {
+                return { created: false, duplicate: true };
+            }
+
+            const { error } = await supabaseClient.from('quotes').insert([plannerPayload]);
+            if (error) throw error;
+            return { created: true, duplicate: false };
         }
 
         // --- SEND DEFECT FUNCTION ---
@@ -926,7 +1050,14 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
             let routingDetails = '';
             const routingDetailsInput = await openRoutingDetailsModal(label, report.defect_routing_details || '');
             if (routingDetailsInput === null) return; // Cancel means do not send the defect.
-            routingDetails = String(routingDetailsInput || '').trim();
+
+            const routingOptions = (typeof routingDetailsInput === 'object' && routingDetailsInput !== null)
+                ? routingDetailsInput
+                : { details: routingDetailsInput, createPlannerCard: false, workByDate: '' };
+
+            routingDetails = String(routingOptions.details || '').trim();
+            const shouldCreatePlannerCard = routingOptions.createPlannerCard === true;
+            const plannerWorkByDate = routingOptions.workByDate || '';
 
             const payload = {
                 submitted_by: currentUserEmail,
@@ -980,7 +1111,21 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
                     return;
                 }
 
-                alert(`Defect successfully sent to ${label} and moved into the ${label} filter.`);
+                let plannerCardNote = '';
+                if (shouldCreatePlannerCard) {
+                    try {
+                        const plannerResult = await createPlannerJobCardFromDefect(report, label, routingDetails, plannerWorkByDate);
+                        plannerCardNote = plannerResult.duplicate
+                            ? '\n\nA matching planner job card already exists, so a duplicate was not created.'
+                            : '\n\nPlanner job card created successfully.';
+                    } catch (plannerErr) {
+                        alert(`Defect was successfully sent to ${label}, but the planner job card could not be created. Supabase error: ${plannerErr.message}`);
+                        loadFleet();
+                        return;
+                    }
+                }
+
+                alert(`Defect successfully sent to ${label} and moved into the ${label} filter.${plannerCardNote}`);
                 loadFleet();
             } catch (err) {
                 alert(`Error sending defect: ${err.message}`);
