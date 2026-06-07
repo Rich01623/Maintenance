@@ -32,6 +32,8 @@
         .btn-history { background: rgba(51, 65, 85, 0.5); color: #cbd5e1; }
         .btn-pdf { background: #0ea5e9; color: white; border-color: #0ea5e9; }
         .btn-compliance { width: 100%; font-size: 10px; font-weight: 900; padding: 6px; border-radius: 4px; margin-top: 2px; text-transform: uppercase; border: none; cursor: pointer; transition: opacity 0.2s; }
+        .readonly-input { opacity: 0.65; cursor: not-allowed; background: rgba(15, 23, 42, 0.35) !important; }
+        .editor-lock-note { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: #f59e0b; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 0.75rem; padding: 0.65rem 0.8rem; margin-bottom: 0.8rem; }
         .label-heading { font-size: 10px; color: #94a3b8; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; display: block; letter-spacing: 0.025em; }
         input[type="date"], .input-text, .login-input { background: rgba(0,0,0,0.1); border-radius: 4px; padding: 4px 6px; border: 1px solid var(--border-color); color: inherit; font-size: 0.9rem; font-weight: 600; width: 100%; outline: none; }
         .login-input { padding: 0.75rem 1rem; margin-bottom: 1rem; background: #0f172a; border-radius: 0.75rem; }
@@ -245,6 +247,50 @@
         <div id="fleet-grid" class="grid-layout"></div>
     </main>
 
+
+
+    <!-- VEHICLE PROFILE MODAL -->
+    <div id="vehicle-profile-modal" class="fixed inset-0 z-[10000] hidden flex items-center justify-center transition-opacity" style="background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(6px);" onclick="if(event.target.id === 'vehicle-profile-modal') closeVehicleProfile()">
+        <div class="glass-card w-full max-w-2xl p-6 relative animate-fade-in" style="background: var(--card-bg); border-radius: 1.5rem; border: 1px solid var(--border-color);">
+            <button onclick="closeVehicleProfile()" class="absolute top-4 right-4 text-slate-400 hover:text-rose-500 transition-colors bg-slate-800 hover:bg-slate-700 p-2 rounded-lg border border-slate-700">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <div class="flex items-center gap-4 mb-6 border-b border-slate-700 pb-4">
+                <div class="p-3 rounded-xl bg-rose-600/10 text-rose-500 shadow-inner">
+                    <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10h10zm0 0h2m-2 0h-2m8 0h2V9a1 1 0 00-.293-.707l-2-2A1 1 0 0017 6h-4v10h4z"></path></svg>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-black uppercase tracking-tight text-white">Vehicle Profile</h3>
+                    <p id="vehicle-profile-edit-note" class="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Additional vehicle data</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="label-heading">Make</label>
+                    <input type="text" id="vehicle-profile-make" class="input-text p-3" placeholder="e.g. DAF">
+                </div>
+                <div>
+                    <label class="label-heading">Model</label>
+                    <input type="text" id="vehicle-profile-model" class="input-text p-3" placeholder="e.g. XF">
+                </div>
+                <div>
+                    <label class="label-heading">Registration Number</label>
+                    <input type="text" id="vehicle-profile-registration" class="input-text p-3 opacity-80" readonly>
+                </div>
+                <div>
+                    <label class="label-heading">DTP Number</label>
+                    <input type="text" id="vehicle-profile-dtp" class="input-text p-3" placeholder="DTP number">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-700">
+                <button onclick="closeVehicleProfile()" class="bg-slate-700 text-white px-5 py-3 rounded-xl text-xs font-black uppercase hover:bg-slate-600 transition-all">Close</button>
+                <button id="vehicle-profile-save" onclick="saveVehicleProfile()" class="bg-rose-600 text-white px-5 py-3 rounded-xl text-xs font-black uppercase hover:bg-rose-500 transition-all">Save Additional Data</button>
+            </div>
+        </div>
+    </div>
+
     <input type="file" id="compliance-upload-hidden" class="hidden" accept=".pdf,.jpg,.jpeg,.png">
 
     <script>
@@ -263,6 +309,83 @@
         let activeUploadData = null;
         let currentPath = []; 
         let currentUserEmail = 'Unknown User'; 
+        let activeVehicleProfileReg = null;
+        const UNIT_CARD_EDITOR_EMAIL = 'chris@frosttransportsolutions.co.uk';
+
+        function canEditUnitCards() {
+            return (currentUserEmail || '').trim().toLowerCase() === UNIT_CARD_EDITOR_EMAIL;
+        }
+
+        function requireUnitCardEditor() {
+            if (!canEditUnitCards()) {
+                alert('Only Chris can edit vehicle and trailer cards.');
+                return false;
+            }
+            return true;
+        }
+
+        function unitEditorLockNoticeHTML() {
+            if (canEditUnitCards()) return '';
+            return `<div class="editor-lock-note col-span-full">View only: only Chris can edit vehicle and trailer cards.</div>`;
+        }
+
+
+        function setVehicleProfileInputsReadOnly(isReadOnly) {
+            ['vehicle-profile-make', 'vehicle-profile-model', 'vehicle-profile-dtp'].forEach(id => {
+                const input = document.getElementById(id);
+                if (!input) return;
+                input.readOnly = isReadOnly;
+                input.disabled = isReadOnly;
+                input.classList.toggle('readonly-input', isReadOnly);
+                input.classList.toggle('opacity-70', isReadOnly);
+            });
+        }
+
+        window.openVehicleProfile = (reg) => {
+            const cleanReg = String(reg || '').replace(/\s+/g, '').toUpperCase();
+            const vehicle = cachedVehicles.find(v => String(v.registration_number || '').replace(/\s+/g, '').toUpperCase() === cleanReg);
+            if (!vehicle) return alert('Vehicle profile not found.');
+
+            activeVehicleProfileReg = vehicle.registration_number;
+            document.getElementById('vehicle-profile-make').value = vehicle.make || '';
+            document.getElementById('vehicle-profile-model').value = vehicle.model || '';
+            document.getElementById('vehicle-profile-registration').value = vehicle.registration_number || '';
+            document.getElementById('vehicle-profile-dtp').value = vehicle.dtp_number || '';
+
+            const canEdit = canEditUnitCards();
+            setVehicleProfileInputsReadOnly(!canEdit);
+            document.getElementById('vehicle-profile-save').style.display = canEdit ? 'inline-flex' : 'none';
+            document.getElementById('vehicle-profile-edit-note').innerText = canEdit ? 'Additional vehicle data' : 'View only: only Chris can edit vehicle profile data';
+            document.getElementById('vehicle-profile-modal').classList.remove('hidden');
+        };
+
+        window.closeVehicleProfile = () => {
+            document.getElementById('vehicle-profile-modal').classList.add('hidden');
+            activeVehicleProfileReg = null;
+        };
+
+        window.saveVehicleProfile = async () => {
+            if (!requireUnitCardEditor()) return;
+            if (!activeVehicleProfileReg) return alert('No vehicle selected.');
+
+            const payload = {
+                make: document.getElementById('vehicle-profile-make').value.trim(),
+                model: document.getElementById('vehicle-profile-model').value.trim(),
+                dtp_number: document.getElementById('vehicle-profile-dtp').value.trim()
+            };
+
+            try {
+                const { error } = await supabaseClient
+                    .from('vehicles')
+                    .update(payload)
+                    .eq('registration_number', activeVehicleProfileReg);
+                if (error) throw error;
+                closeVehicleProfile();
+                await loadFleet();
+            } catch (err) {
+                alert('Error saving vehicle profile: ' + err.message);
+            }
+        };
 
         // TARGET UNITS FOR LOLER
         const lolerVehicles = ['FD65VZA', 'HS19VNH', 'HS19YNH'];
@@ -857,9 +980,12 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
                     }
                 }
             }
+            const uploadButtonHTML = canEditUnitCards()
+                ? `<button onclick="window.triggerUpload('${unitReg}', '${fieldKey}', '${tableName}')" class="w-8 flex items-center justify-center bg-slate-800 hover:bg-slate-600 border-l border-slate-600 shrink-0" title="Upload replacement document"><svg class="w-3 h-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg></button>`
+                : `<button onclick="requireUnitCardEditor()" class="w-8 flex items-center justify-center bg-slate-900 border-l border-slate-600 shrink-0 opacity-50 cursor-not-allowed" title="Only Chris can upload/edit card documents"><svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg></button>`;
             return `<div class="flex w-full mt-0.5 rounded border border-slate-600 overflow-hidden shadow-sm h-7">
                 <button onclick="window.viewLatestDocument('${unitReg}', '${fieldKey}', '${tableName}')" class="flex-grow text-center text-[0.80rem] font-bold ${bgColor} ${textColor} ${extraClasses}">${displayStr}</button>
-                <button onclick="window.triggerUpload('${unitReg}', '${fieldKey}', '${tableName}')" class="w-8 flex items-center justify-center bg-slate-800 hover:bg-slate-600 border-l border-slate-600 shrink-0"><svg class="w-3 h-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg></button>
+                ${uploadButtonHTML}
             </div>`;
         };
 
@@ -925,7 +1051,7 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
                 const statLabel = document.getElementById('stat-label'); if(statLabel) statLabel.innerText = "TOTAL UNITS";
                 loadFleet();
             } else {
-                if(addBtn) addBtn.style.display = (tab === 'defects') ? 'none' : 'block';
+                if(addBtn) addBtn.style.display = (tab === 'defects' || !canEditUnitCards()) ? 'none' : 'block';
                 if(reportBtn) reportBtn.style.display = (tab === 'defects') ? 'none' : 'block';
                 if(pullWeekBtn) pullWeekBtn.style.display = (tab === 'defects') ? 'none' : 'block';
                 if(topSorting) topSorting.style.display = (tab === 'defects') ? 'none' : 'flex'; 
@@ -1320,13 +1446,20 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
                 });
 
                 document.getElementById('stat-total').innerText = displayFLTs.length;
+                grid.insertAdjacentHTML('beforeend', unitEditorLockNoticeHTML());
 
                 displayFLTs.forEach(v => {
                     const table = 'vehicles';
                     const card = document.createElement('div');
                     card.className = `glass-card rounded-xl ${v.is_vor ? 'card-vor' : ''}`;
-                    card.setAttribute('data-search', `${v.registration_number} ${v.vin_number || ''}`);
+                    card.setAttribute('data-search', `${v.registration_number} ${v.vin_number || ''} ${v.make || ''} ${v.model || ''} ${v.dtp_number || ''}`);
                     
+                    const canEditThisCard = canEditUnitCards();
+                    const editDisabledAttr = canEditThisCard ? '' : 'disabled readonly';
+                    const editInputClass = canEditThisCard ? '' : ' readonly-input';
+                    const editChangeHandler = canEditThisCard ? `onchange="window.save('${v.registration_number}', 'vin_number', this.value, '${table}')"` : `onchange="this.value='${v.vin_number || ''}'; requireUnitCardEditor()"`;
+                    const cardVorHandler = canEditThisCard ? `onclick="toggleVOR_Action('${v.registration_number}', ${v.is_vor || false}, '${table}')"` : `onclick="requireUnitCardEditor()" title="Only Chris can change card VOR status"`;
+
                     let vorStampHTML = '<div class="vor-stamp">OFF ROAD</div>';
                     if (v.is_vor) {
                         vorStampHTML = `
@@ -1345,10 +1478,10 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
                                 <button onclick="generatePDF('${v.registration_number}')" class="btn-action btn-pdf">PDF</button>
                                 <button onclick="generateReport('${v.registration_number}', true)" class="btn-action btn-history">History</button>
                             </div>
-                            <button onclick="toggleVOR_Action('${v.registration_number}', ${v.is_vor || false}, '${table}')" class="btn-action ${v.is_vor ? 'text-rose-500 font-black' : 'text-slate-500'}">${v.is_vor ? '● VOR' : '○ Active'}</button>
+                            <button ${cardVorHandler} class="btn-action ${v.is_vor ? 'text-rose-500 font-black' : 'text-slate-500'} ${canEditThisCard ? '' : 'opacity-60 cursor-not-allowed'}">${v.is_vor ? '● VOR' : '○ Active'}</button>
                         </div>
                         <div class="content-fade">
-                            <div class="mb-3"><span class="label-heading">Serial Number (VIN)</span><input type="text" class="input-text" value="${v.vin_number || ''}" onchange="supabaseClient.from('vehicles').upsert({ registration_number: '${v.registration_number}', vin_number: this.value }).then(()=>loadFleet())"></div>
+                            <div class="mb-3"><span class="label-heading">Serial Number (VIN)</span><input type="text" class="input-text${editInputClass}" value="${v.vin_number || ''}" ${editDisabledAttr} ${editChangeHandler}></div>
                             <div class="grid grid-cols-1 gap-3 mt-4">
                                 <div class="p-4 rounded-xl border border-dashed border-slate-700 bg-slate-800/30 text-center">
                                     <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Compliance Fields In Development</p>
@@ -1480,6 +1613,9 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
             data = data.filter(v => v.registration_number !== 'FLT-01' && v.registration_number !== 'FLT-02');
 
             document.getElementById('stat-total').innerText = data.length;
+            if (['vehicle', 'trailer'].includes(currentTab)) {
+                grid.insertAdjacentHTML('beforeend', unitEditorLockNoticeHTML());
+            }
 
             data.sort((a, b) => {
                 if (a.is_vor && !b.is_vor) return 1;
@@ -1503,10 +1639,17 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
                 let table = isTrailer ? 'trailers' : 'vehicles';
                 
                 const requiresLoler = isTrailer ? lolerTrailers.includes(vReg) : lolerVehicles.includes(vReg);
+                const canEditThisCard = canEditUnitCards();
+                const editDisabledAttr = canEditThisCard ? '' : 'disabled readonly';
+                const editInputClass = canEditThisCard ? '' : ' readonly-input';
+                const editChangeHandler = canEditThisCard ? `onchange="window.save('${v.registration_number}', 'vin_number', this.value, '${table}')"` : `onchange="this.value='${v.vin_number || ''}'; requireUnitCardEditor()"`;
+                const cardVorHandler = canEditThisCard ? `onclick="toggleVOR_Action('${v.registration_number}', ${v.is_vor}, '${table}')"` : `onclick="requireUnitCardEditor()" title="Only Chris can change card VOR status"`;
+                const removeUnitHTML = canEditThisCard ? `<button onclick="window.removeUnit('${v.registration_number}', '${table}')" class="text-slate-600 hover:text-rose-500 transition-colors mt-2" title="Remove unit"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>` : '';
+                const additionalDataButtonHTML = !isTrailer ? `<button onclick="openVehicleProfile('${v.registration_number}')" class="btn-action bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-500">Additional Data</button>` : '';
 
                 const card = document.createElement('div');
                 card.className = `glass-card rounded-xl ${v.is_vor ? 'card-vor' : ''}`;
-                card.setAttribute('data-search', `${v.registration_number} ${v.vin_number || ''}`);
+                card.setAttribute('data-search', `${v.registration_number} ${v.vin_number || ''} ${v.make || ''} ${v.model || ''} ${v.dtp_number || ''}`);
                 
                 let vehicleSpecifics = !isTrailer ? `
                     <div class="grid grid-cols-2 gap-x-3 gap-y-2">
@@ -1582,15 +1725,14 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
                             <button onclick="generatePDF('${v.registration_number}')" class="btn-action btn-pdf">PDF</button>
                             <button onclick="generateReport('${v.registration_number}', true)" class="btn-action btn-history">History</button>
                             <button onclick="generateReport('${v.registration_number}', false)" class="btn-action ${hasActiveDefect ? 'defect-active' : ''}">${hasActiveDefect ? 'Defect' : 'Clear'}</button>
+                            ${additionalDataButtonHTML}
                         </div>
-                        <button onclick="toggleVOR_Action('${v.registration_number}', ${v.is_vor}, '${table}')" class="btn-action ${v.is_vor ? 'text-rose-500 font-black' : 'text-slate-500'}">${v.is_vor ? '● VOR' : '○ Active'}</button>
+                        <button ${cardVorHandler} class="btn-action ${v.is_vor ? 'text-rose-500 font-black' : 'text-slate-500'} ${canEditThisCard ? '' : 'opacity-60 cursor-not-allowed'}">${v.is_vor ? '● VOR' : '○ Active'}</button>
                     </div>
                     <div class="content-fade">
-                        <div class="mb-3"><span class="label-heading">VIN Number</span><input type="text" class="input-text" value="${v.vin_number || ''}" onchange="window.save('${v.registration_number}', 'vin_number', this.value, '${table}')"></div>
+                        <div class="mb-3"><span class="label-heading">VIN Number</span><input type="text" class="input-text${editInputClass}" value="${v.vin_number || ''}" ${editDisabledAttr} ${editChangeHandler}></div>
                         ${vehicleSpecifics}
-                        <button onclick="window.removeUnit('${v.registration_number}', '${table}')" class="text-slate-600 hover:text-rose-500 transition-colors mt-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        </button>
+                        ${removeUnitHTML}
                     </div></div>`;
                 grid.appendChild(card);
             });
@@ -1600,11 +1742,13 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
         }
 
         window.triggerUpload = (reg, field, table) => {
+            if (!requireUnitCardEditor()) return;
             activeUploadData = { reg, field, table };
             document.getElementById('compliance-upload-hidden').click();
         };
 
         document.getElementById('compliance-upload-hidden').onchange = async (e) => {
+            if (!requireUnitCardEditor()) { e.target.value = ''; activeUploadData = null; return; }
             const file = e.target.files[0];
             if (!file || !activeUploadData) return;
             const { reg, field, table } = activeUploadData;
@@ -1636,11 +1780,13 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
         }
 
         window.save = async (reg, field, val, table) => { 
+            if (!requireUnitCardEditor()) { loadFleet(); return; }
             await supabaseClient.from(table).update({ [field]: val }).eq('registration_number', reg); 
             loadFleet(); 
         };
 
         window.toggleVOR_Action = async (reg, state, table) => { 
+            if (!requireUnitCardEditor()) return;
             let reason = null;
             if (!state) { 
                 reason = prompt(`Please enter the reason for placing ${reg} VOR:`);
@@ -1656,6 +1802,7 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
         };
 
         window.addNewUnit = async () => { 
+            if (!requireUnitCardEditor()) return;
             const t = currentTab === 'trailer' ? 'trailers' : 'vehicles'; 
             const r = prompt("Enter New Registration:").toUpperCase().trim(); 
             if(r) { 
@@ -1665,6 +1812,7 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
         };
 
         window.removeUnit = async (reg, table) => { 
+            if (!requireUnitCardEditor()) return;
             if(confirm(`Remove ${reg} permanently?`)) { 
                 await supabaseClient.from(table).delete().eq('registration_number', reg); 
                 loadFleet(); 
@@ -2345,6 +2493,14 @@ Rejected Reason: ${report.defect_rejected_reason}` : '';
             const lastTab = localStorage.getItem('fts_current_tab');
             if (lastTab) switchTab(lastTab); 
         };
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                const vehicleProfileModal = document.getElementById('vehicle-profile-modal');
+                if (vehicleProfileModal && !vehicleProfileModal.classList.contains('hidden')) closeVehicleProfile();
+            }
+        });
+
     </script>
 </body>
 </html>
